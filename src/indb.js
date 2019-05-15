@@ -1,38 +1,20 @@
 import { parse, modifyError } from './utils'
 
 export class InDB {
-	constructor(options) {
-		let { name = 'InDB', version = 1, stores, use, timeout } = options || {}
+	constructor(options = {}) {
+		let { name, version = 1, stores, timeout } = options
+
+		if (!name) {
+			throw new Error('[InDB]: you should pass `name` option.')
+		}
 
 		if (!stores || !Array.isArray(stores) || !stores.length) {
-			stores = [
-				{
-					name: use || 'InDB',
-					isKeyValue: true,
-				},
-			]
+			throw new Error('[InDB]: you should pass `stores` option.')
 		}
-
-		if (!use) {
-			use = stores[0].name
-		}
-
-		let currentStore = stores.find(item => item.name === use)
 
 		this.name = name
 		this.version = version
 		this.stores = stores
-		this.currentStore = currentStore
-
-		this.runtimes = [] // the writable transaction queue
-
-		// if it is a key-value store, append special methods
-		if (currentStore.isKeyValue) {
-			this.key = i => this.keys().then(keys => keys && keys[i])
-			this.getItem = key => this.get(key).then(obj => obj && obj.value)
-			this.setItem = (key, value) => this.put({ key, value })
-			this.removeItem = key => this.delete(key)
-		}
 
 		let request = indexedDB.open(name, version)
 		// update database structure
@@ -78,7 +60,9 @@ export class InDB {
 			}
 		}
 
+		this.runtimes = [] // the writable transaction queue
 		this.timeout = timeout || 0
+		this.used = {}
 	}
 	db() {
 		return new Promise((resolve, reject) => {
@@ -91,20 +75,58 @@ export class InDB {
 			}
 		})
 	}
-	use(name) {
-		return new InDB({
-			name: this.name,
-			version: this.version,
-			stores: this.stores,
-			use: name,
+	use(storeName) {
+		const { stores, version, name } = this
+		const currentStore = stores.find(item => item.name === storeName)
+
+		if (!currentStore) {
+			throw new Error(`[InDB]: store ${storeName} is not existing.`)
+		}
+
+		// use connected store
+		if (this.used[storeName]) {
+			return this.used[storeName]
+		}
+
+		const store = new InDBStore({
+			name,
+			version,
+			stores,
 		})
+
+		store.currentStore = currentStore
+
+		// if it is a key-value store, append special methods
+		if (currentStore.isKeyValue) {
+			store.key = i => store.keys().then(keys => keys && keys[i])
+			store.getItem = key => store.get(key).then(obj => obj && obj.value)
+			store.setItem = (key, value) => store.put({ key, value })
+			store.removeItem = key => store.delete(key)
+		}
+
+		this.used[storeName] = store
+
+		return store
 	}
 	close() {
 		this.runtimes = null
+		this.used = null
+		this.stores = null
+
 		return this.db().then((db) => {
 			db.close()
 		})
 	}
+}
+
+export class InDBStore extends InDB {
+	use() {
+		throw new Error('[InDBStore]: you can not use `use` method on InDBStore')
+	}
+	close() {
+		throw new Error('[InDBStore]: you can not use `close` method on InDBStore')
+	}
+
 	transaction(writable = false) {
 		let name = this.currentStore.name
 		let mode = writable ? 'readwrite' : 'readonly'
@@ -488,4 +510,21 @@ export class InDB {
 		return this.request(objectStore => objectStore.clear(), 'readwrite')
 	}
 }
+
+const idb = new InDB({
+	name: 'InDB',
+	stores: [
+		{
+			name: 'InDB',
+			isKeyValue: true,
+		},
+	],
+})
+const store = idb.use('InDB')
+
+InDB.setItem = store.setItem.bind(store)
+InDB.getItem = store.getItem.bind(store)
+InDB.removeItem = store.removeItem.bind(store)
+InDB.key = store.key.bind(store)
+
 export default InDB

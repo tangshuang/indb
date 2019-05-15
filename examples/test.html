@@ -47,17 +47,21 @@ const idb = new InDB({
             name: 'cleartest',
         },
     ],
-    use: 'students',
 })
-const expect = chai.expect
 
+const departstore = idb.use('departs')
+const studentstore = idb.use('students')
+const kvstore = idb.use('keyvalue')
+const teststore = idb.use('cleartest')
+
+const expect = chai.expect
 mocha.setup('bdd')
 
 // ------------------------- tests --------------------
 it('when there is no data in db, test .first()', async () => {
-    await idb.clear()
+    await studentstore.clear()
     try {
-        await idb.first()
+        await studentstore.first()
     }
     catch(e) {
         expect(e.message).to.equal('there is no record in the store')
@@ -65,11 +69,11 @@ it('when there is no data in db, test .first()', async () => {
 })
 
 it('add', async () => {
-    let obj = await idb.get('1')
+    let obj = await studentstore.get('1')
     if (obj) {
         let flag = false
         try {
-            await idb.add({ id: '1', name: 'toda', age: 10 })
+            await studentstore.add({ id: '1', name: 'toda', age: 10 })
         }
         catch(e) {
             flag = true
@@ -77,8 +81,8 @@ it('add', async () => {
         expect(flag).to.be.true
     }
     else {
-        await idb.add({ id: '1', name: 'toda', age: 10 })
-        let obj = await idb.get('1')
+        await studentstore.add({ id: '1', name: 'toda', age: 10 })
+        let obj = await studentstore.get('1')
         expect(obj.name).to.equal('toda')
         expect(obj.age).to.equal(10)
     }
@@ -86,123 +90,123 @@ it('add', async () => {
 
 it('put', async () => {
     let time = new Date()
-    await idb.put({ id: '2', name: 'sood', age: 10, time })
-    let obj = await idb.get('2')
+    await studentstore.put({ id: '2', name: 'sood', age: 10, time })
+    let obj = await studentstore.get('2')
     expect(obj.name).to.equal('sood')
     expect(obj.time.valueOf()).to.equal(time.valueOf())
 
     // add items for preparation
-    await idb.put({ id: '3', name: 'tomy', age: 10 })
-    await idb.put({ id: '4', name: 'goda', age: 11 })
-    await idb.put({ id: '5', name: 'othe', age: 23 })
+    await studentstore.put({ id: '3', name: 'tomy', age: 10 })
+    await studentstore.put({ id: '4', name: 'goda', age: 11 })
+    await studentstore.put({ id: '5', name: 'othe', age: 23 })
 })
 
 it('delete', async () => {
-    await idb.delete('1')
-    let obj = await idb.get('1')
+    await studentstore.delete('1')
+    let obj = await studentstore.get('1')
     expect(obj).to.be.undefined
 })
 
 it('get', async () => {
-    let obj = await idb.get('3')
+    let obj = await studentstore.get('3')
     expect(obj.name).to.equal('tomy')
 })
 
 it('find', async () => {
-    let obj = await idb.find('age', 11)
+    let obj = await studentstore.find('age', 11)
     expect(obj.name).to.equal('goda')
 })
 
 it('keys', async () => {
-    let keys = await idb.keys()
+    let keys = await studentstore.keys()
     expect(keys).to.deep.equal(['2', '3', '4', '5'])
 })
 
 it('all', async () => {
-    let items = await idb.all()
+    let items = await studentstore.all()
     expect(items.length).to.equal(4)
 })
 
 it('first', async () => {
-    let item = await idb.first()
+    let item = await studentstore.first()
     expect(item.id).to.equal('2')
 })
 
 it('last', async () => {
-    let item = await idb.last()
+    let item = await studentstore.last()
     expect(item.id).to.equal('5')
 })
 
 it('some', async () => {
-    let items = await idb.some(2)
+    let items = await studentstore.some(2)
     expect(items.map(item => item.id)).to.deep.equal(['2', '3'])
 })
 
 it('some with offset', async () => {
-    let items = await idb.some(2, 1)
+    let items = await studentstore.some(2, 1)
     expect(items.map(item => item.id)).to.deep.equal(['3', '4'])
 })
 
 it('count', async () => {
-    let count = await idb.count()
+    let count = await studentstore.count()
     expect(count).to.equal(4)
 })
 
 it('query', async () => {
-    let objs = await idb.query('age', 10)
+    let objs = await studentstore.query('age', 10)
     expect(objs.length).to.equal(2)
 })
 
 it('query >', async () => {
-    let objs = await idb.query('age', 15, '>')
+    let objs = await studentstore.query('age', 15, '>')
     expect(objs).to.deep.equal([{ id: '5', name: 'othe', age: 23 }])
 })
 
 it('query !=', async () => {
-    let objs = await idb.query('age', 23, '!=')
+    let objs = await studentstore.query('age', 23, '!=')
     expect(objs.length).to.equal(3)
 })
 
 it('select', async () => {
-    let objs = await idb.select([
+    let objs = await studentstore.select([
         { key: 'age', value: 22, compare: '>', optional: true },
         { key: 'age', value: 10, compare: '=', optional: true },
     ])
     expect(objs.length).to.equal(3)
 })
 
-
 it('use', async () => {
-    let idb2 = idb.use('departs')
-    await idb2.clear()
-    await idb2.put({ id: '1', name: 'doge' })
-    let objs = await idb2.all()
+    await departstore.clear()
+    await departstore.put({ id: '1', name: 'doge' })
+    let objs = await departstore.all()
     expect(objs).to.deep.equal([{ id: '1', name: 'doge' }])
 })
 
 it('keys in autoincrease store', async () => {
-    let idb2 = idb.use('departs')
-    let keys = await idb2.keys()
+    let keys = await departstore.keys()
     expect(keys).to.deep.equal(['1'])
 })
 
-
 it('setItem/getItem/removeItem', async () => {
-    let idb3 = idb.use('keyvalue')
-    await idb3.clear()
-    await idb3.setItem('2', 'jiago')
-    let name = await idb3.getItem('2')
+    await kvstore.clear()
+    await kvstore.setItem('2', 'jiago')
+    let name = await kvstore.getItem('2')
     expect(name).to.equal('jiago')
-    await idb3.removeItem('2')
-    let nil = await idb3.getItem('2')
+    await kvstore.removeItem('2')
+    let nil = await kvstore.getItem('2')
     expect(nil).to.be.undefined
 })
 
 it('clear', async () => {
-    let idb2 = idb.use('cleartest')
-    await idb2.clear()
-    let count = await idb2.count()
+    await teststore.clear()
+    let count = await teststore.count()
     expect(count).to.equal(0)
+})
+
+it('Storage', async () => {
+    await InDB.setItem('name', 'tomy')
+    let name = await InDB.getItem('name')
+    expect(name).to.equal('tomy')
 })
 
 it('in webworker', async () => {
@@ -236,11 +240,11 @@ it('in webworker', async () => {
                     ],
                 },
             ],
-            use: 'students',
         })
     `
     let fn = `async function() {
-        let obj = await idb.get('5')
+        let store = idb.use('students')
+        let obj = await store.get('5')
         $notify(obj)
     }`
     let worker = new HelloWebWorker(preparation, fn)
