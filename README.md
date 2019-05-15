@@ -1,11 +1,11 @@
-# HelloIndexedDB
+# InDB
 
 A library to operate IndexedDB easily.
 
 ## Install
 
 ```
-npm install --save hello-indexeddb
+npm install --save indb
 ```
 
 ## Usage
@@ -13,22 +13,22 @@ npm install --save hello-indexeddb
 ES6:
 
 ```js
-import HelloIndexedDB from 'hello-indexeddb'
+import InDB from 'indb'
 ```
 
 CommonJS:
 
 ```js
-const { HelloIndexedDB } = require('hello-indexeddb')
+const { InDB } = require('indb')
 ```
 
 AMD:
 
 ```html
-<script src="dist/hello-indexeddb.js"></script>
+<script src="dist/indb.js"></script>
 <script>
 define(function(require) {
-  const { HelloIndexedDB } = require('hello-indexeddb')
+  const { InDB } = require('indb')
   // ...
 })
 </script>
@@ -37,10 +37,10 @@ define(function(require) {
 Normal Browsers:
 
 ```html
-<script src="dist/hello-indexeddb.js"></script>
+<script src="dist/indb.js"></script>
 <script>
-const { HelloIndexedDB } = window['hello-indexeddb']
-const idb = new HelloIndexedDB(options)
+const { InDB } = window['indb']
+const idb = new InDB(options)
 </scirpt>
 ```
 
@@ -114,7 +114,7 @@ const options = {
   ],
   use: 'store1',
 }
-const idb = new HelloIndexedDB(options)
+const idb = new InDB(options)
 ```
 
 ### get(key)
@@ -315,7 +315,7 @@ Remember to close database connect if you do not use it any more.
 
 _not async function_
 
-Switch to another store, return a new instance of HelloIndexedDB.
+Switch to another store, return a new instance of InDB.
 
 ```js
 let idb2 = idb.use('store2')
@@ -330,7 +330,7 @@ The methods of idb2 is the same as idb, but use 'store2' as its current objectSt
 Use like a pure key-value Storage such as localStorage:
 
 ```js
-let store = new HelloIndexedDB() // use a store which named `HelloIndexedDB`
+let store = new InDB() // use a store which named `InDB`
 await store.setItem('name', 'tomy')
 let name = await store.getItem('name')
 ```

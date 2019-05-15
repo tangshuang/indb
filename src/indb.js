@@ -1,13 +1,13 @@
 import { parse, modifyError } from './utils'
 
-export class HelloIndexedDB {
+export class InDB {
 	constructor(options) {
-		let { name = 'HelloIndexedDB', version = 1, stores, use, timeout } = options || {}
+		let { name = 'InDB', version = 1, stores, use, timeout } = options || {}
 
 		if (!stores || !Array.isArray(stores) || !stores.length) {
 			stores = [
 				{
-					name: use || 'HelloIndexedDB',
+					name: use || 'InDB',
 					isKeyValue: true,
 				},
 			]
@@ -92,7 +92,7 @@ export class HelloIndexedDB {
 		})
 	}
 	use(name) {
-		return new HelloIndexedDB({
+		return new InDB({
 			name: this.name,
 			version: this.version,
 			stores: this.stores,
@@ -148,7 +148,7 @@ export class HelloIndexedDB {
 				if (this.timeout > 0) {
 					setTimeout(() => {
 						if (runtime && runtime.status) {
-							runtime.reject(new Error('[HelloIndexedDB]: transaction timeout'))
+							runtime.reject(new Error('[InDB]: transaction timeout'))
 							runtime.complete()
 						}
 					}, this.timeout)
@@ -281,7 +281,7 @@ export class HelloIndexedDB {
 	}
 	last() {
 		return new Promise((resolve, reject) => {
-			this.some(1, 0, 'prev').then((items) => resolve(items[0])).catch(reject)
+			this.some(1, -1).then((items) => resolve(items[0])).catch(reject)
 		})
 	}
 	some(count = 10, offset = 0) {
@@ -479,7 +479,7 @@ export class HelloIndexedDB {
 		return this.keyPath().then((keyPah) => {
 			let key = parse(obj, keyPah)
 			if (key === undefined) {
-				throw new Error(`[HelloIndexedDB]: your passed object to remove() does not contain keyPath '${keyPah}'.`)
+				throw new Error(`[InDB]: your passed object to remove() does not contain keyPath '${keyPah}'.`)
 			}
 			return this.delete(key)
 		})
@@ -488,4 +488,4 @@ export class HelloIndexedDB {
 		return this.request(objectStore => objectStore.clear(), 'readwrite')
 	}
 }
-export default HelloIndexedDB
+export default InDB

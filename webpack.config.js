@@ -1,10 +1,10 @@
 module.exports = {
 	mode: 'none',
-	entry: __dirname + '/src/hello-indexeddb.js',
+	entry: __dirname + '/src/indb.js',
 	output: {
 		path: __dirname + '/dist',
-		filename: 'hello-indexeddb.js',
-		library: 'hello-indexeddb',
+		filename: 'indb.js',
+		library: 'indb',
 		libraryTarget: 'umd',
 		globalObject: `typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : this`,
 	},

@@ -6,14 +6,14 @@
 
 <script src="../node_modules/mocha/mocha.js"></script>
 <script src="../node_modules/chai/chai.js"></script>
-<script src="../dist/hello-indexeddb.js"></script>
+<script src="../dist/indb.js"></script>
 <script src="../node_modules/hello-webworker/dist/hello-webworker.js"></script>
 <script>
-const { HelloIndexedDB } = window['hello-indexeddb']
+const { InDB } = window['indb']
 const HelloWebWorker = window['hello-webworker']
 const DB_NAME = 'my-test-idb'
 const DB_VERSION = 3
-const idb = new HelloIndexedDB({
+const idb = new InDB({
     name: DB_NAME,
     version: DB_VERSION,
     stores: [
@@ -212,9 +212,9 @@ it('in webworker', async () => {
     path.pop()
     let dir = path.join('/')
     let preparation = `
-        importScripts('${dir}/dist/hello-indexeddb.js')
-        const { HelloIndexedDB } = window['hello-indexeddb']
-        const idb = new HelloIndexedDB({
+        importScripts('${dir}/dist/indb.js')
+        const { InDB } = window['indb']
+        const idb = new InDB({
             name: '${DB_NAME}',
             version: ${DB_VERSION},
             stores: [

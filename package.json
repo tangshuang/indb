@@ -1,8 +1,8 @@
 {
-  "name": "hello-indexeddb",
-  "version": "2.6.2",
+  "name": "indb",
+  "version": "1.0.0",
   "description": "A library to operate IndexedDB easily.",
-  "main": "dist/hello-indexeddb.js",
+  "main": "dist/indb.js",
   "scripts": {
     "prepublishOnly": "npm run build",
     "build": "rm -rf dist && mkdir dist && webpack",
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tangshuang/hello-indexeddb.git"
+    "url": "git+https://github.com/tangshuang/indb.git"
   },
   "keywords": [
     "IndexedDB"
