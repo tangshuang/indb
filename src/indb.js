@@ -310,15 +310,17 @@ export class InDBStore extends InDB {
 		return new Promise((resolve, reject) => {
 			let results = []
 			let i = 0
-			let start = offset
-			let end = offset + count
+			if (offset === 0) offset += offset
+			let end = offset + count - 1
+			let start = offset === 1 ? offset - 1 : offset
 			let direction
 
 			if (offset < 0) {
 				direction = 'prev'
-				count = Math.min(count, -offset)
-				start = -(offset + count)
-				end = start + count
+				count = Math.max(count, -offset)
+				start = -offset - 1
+				// 负数从 -1 开始  偏移量要比正数 + 1
+				end = count + (offset === -1 ? 0 : -(offset + 1))
 			}
 
 			const success = (results) => {
@@ -332,10 +334,7 @@ export class InDBStore extends InDB {
 				direction,
 				onTouch: (cursor, tx) => {
 					if (cursor) {
-						if (i < start) {
-							cursor.continue()
-						}
-						else if (i < end) {
+						if (i < end) {
 							results.push(cursor.value)
 							cursor.continue()
 						}
