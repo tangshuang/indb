@@ -250,11 +250,11 @@ Choose from `>` `>=` `<` `<=` `=` `!=` `%` `in`.
 
 Notice `!=` will use `!==`, `=` will use `===`, so you should pass right typeof of value.
 
-### select([{ key, value, compare, optional }])
+### select([{ keyPath, value, compare, optional }])
 
 Select objects with multiple conditions. Pass conditions as an array, each condition item contains:
 
-- key: an object property
+- keyPath: an object property keyPath
 - value: the value to be found
 - compare: `>` `>=` `<` `<=` `!=` `=` `%`
 - optional: wether to make this condition to be an optional, default 'false' which means 'AND' in SQL.
@@ -264,21 +264,21 @@ Examples:
 ```js
 // to find objects which amount>10 AND color='red'
 let objs = await store.select([
-  { key: 'amount', value: 10, compare: '>' },
-  { key: 'color', value: 'red' },
+  { keyPath: 'amount', value: 10, compare: '>' },
+  { keyPath: 'color', value: 'red' },
 ])
 
 // to find objects which amount>10 OR amount<6
 let objs = await store.select([
-  { key: 'amount', value: 10, compare: '>', optional: true },
-  { key: 'amount', value: 6, compare: '<', optional: true },
+  { keyPath: 'amount', value: 10, compare: '>', optional: true },
+  { keyPath: 'amount', value: 6, compare: '<', optional: true },
 ])
 
 // to find objects which amount>10 AND (color='red' OR color='blue')
 let objs = await store.select([
-  { key: 'amount', value: 10, compare: '>' },
-  { key: 'color', value: 'red', optional: true },
-  { key: 'color', value: 'blue', optional: true },
+  { keyPath: 'amount', value: 10, compare: '>' },
+  { keyPath: 'color', value: 'red', optional: true },
+  { keyPath: 'color', value: 'blue', optional: true },
 ])
 ```
 

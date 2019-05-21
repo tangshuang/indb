@@ -314,6 +314,8 @@ export class InDBStore extends InDB {
 			let end = offset + count
 			let direction
 
+			// offset < 0, means begining from the latest item,
+			// for example, offset = -1, means begining from the last item
 			if (offset < 0) {
 				direction = 'prev'
 				count = Math.min(count, -offset)
