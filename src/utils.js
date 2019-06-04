@@ -50,3 +50,24 @@ export function modifyError(e) {
   e.message = '[HelloIndexedDB]: ' + e.message
   return e
 }
+
+/**
+ * 通过一个异步函数处理一个数组
+ * @param {*} items
+ * @param {*} fn
+ */
+export function pipeline(items, fn) {
+  return new Promise((resolve, reject) => {
+    let i = 0
+    let len = items.length
+    let through = () => {
+      if (i >= len) {
+        resolve()
+        return
+      }
+      let item = items[i]
+      return Promise.resolve().then(() => fn(item, i)).then(through).catch(reject)
+    }
+    return through()
+  })
+}

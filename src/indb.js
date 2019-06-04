@@ -1,4 +1,4 @@
-import { parse, modifyError } from './utils'
+import { parse, modifyError, pipeline } from './utils'
 
 export class InDB {
 	constructor(options = {}) {
@@ -497,9 +497,21 @@ export class InDBStore extends InDB {
 		return this.request(objectStore => objectStore.put(obj), 'readwrite')
 	}
 	delete(key) {
+		// delete multiple
+		if (Array.isArray(keys)) {
+			const keys = key
+			return pipeline(keys, (key) => this.delete(key))
+		}
+
 		return this.request(objectStore => objectStore.delete(key), 'readwrite')
 	}
 	remove(obj) {
+		// remove multiple
+		if (Array.isArray(obj)) {
+			const objs = obj
+			return pipeline(objs, (obj) => this.remove(obj))
+		}
+
 		return this.keyPath().then((keyPah) => {
 			let key = parse(obj, keyPah)
 			if (key === undefined) {
