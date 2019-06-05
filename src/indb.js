@@ -210,12 +210,13 @@ export class InDBStore {
 			})
 		})
 	}
-	iterate(fn) {
+	iterate(fn, writable = true) {
 		return new Promise((resolve, reject) => {
 			this.cursor({
-				onTouch: (cursor) => {
-					const obj = cursor.value
-					fn(obj, cursor)
+				onTouch: (cursor, tx) => {
+					const next = () => cursor.continue()
+					const stop = () => tx.abort()
+					fn(cursor, next, stop)
 				},
 				onDone: () => {
 					resolve()
@@ -223,7 +224,28 @@ export class InDBStore {
 				onError: (e) => {
 					reject(e)
 				},
-			}, true)
+			}, writable)
+		})
+	}
+	batch(fns, writable = true) {
+		return this.transaction(writable).then((tx) => {
+			const name = this.name
+			const promises = []
+			fns.forEach((fn) => {
+				const deferer = new Promise((resolve, reject) => {
+					const objectStore = tx.objectStore(name)
+					const request = fn(objectStore)
+					request.onsuccess = (e) => {
+						const result = e.target.result
+						resolve(result)
+					}
+					request.onerror = (e) => {
+						reject(modifyError(e))
+					}
+				})
+				promises.push(deferer)
+			})
+			return Promise.all(promises)
 		})
 	}
 
@@ -234,20 +256,13 @@ export class InDBStore {
 
 		// single key
 		if (!Array.isArray(key)) {
-			return this.request(objectStore => objectStore.get(key)).then((obj) => parse(obj, keyPah) ? obj : undefined)
+			return this.request(objectStore => objectStore.get(key))
 		}
 
 		// multiple keys
 		const keys = key
-		const results = []
-		return this.each((obj) => {
-			const key = parse(obj, keyPah)
-			if (keys.indexOf(key) > -1) {
-				results.push(obj)
-			}
-		}).then(() => {
-			return results
-		})
+		const fns = keys.map(key => objectStore => objectStore.get(key))
+		return this.batch(fns, false)
 	}
 	keys() {
 		return this.request(objectStore => objectStore.getAllKeys())
@@ -317,8 +332,7 @@ export class InDBStore {
 	}
 	// =========================
 	find(key, value) {
-		const keyPah = this.keyPath
-		return this.request(objectStore => objectStore.index(key).get(value)).then((obj) => parse(obj, keyPah) ? obj : undefined)
+		return this.request(objectStore => objectStore.index(key).get(value))
 	}
 	query(key, value, compare) {
 		const range = (function() {
@@ -465,46 +479,8 @@ export class InDBStore {
 
 		// multiple objects
 		const objs = obj
-		const name = this.name
-		return this.transaction(true).then((tx) => {
-			const promises = []
-			objs.forEach((obj) => {
-				const p = new Promise((resolve, reject) => {
-					const objectStore = tx.objectStore(name)
-					const request = objectStore.put(obj)
-					request.onsuccess = (e) => {
-						const result = e.target.result
-						resolve(result)
-					}
-					request.onerror = (e) => {
-						reject(modifyError(e))
-					}
-				})
-				promises.push(p)
-			})
-			return Promise.all(promises)
-		})
-	}
-	update(obj) {
-		const keyPah = this.keyPath
-
-		// single object
-		if (!Array.isArray(obj)) {
-			const key = parse(obj, keyPah)
-			return this.get(key).then(item => item && this.put(obj))
-		}
-
-		// multiple objects
-		const objs = obj
-		const keys = objs.map(obj => parse(obj, keyPah))
-		return this.iterate((obj, cursor) => {
-			const key = parse(obj, keyPah)
-			const index = keys.indexOf(key)
-			if (index > -1) {
-				const target = objs[index]
-				cursor.update(target)
-			}
-		})
+		const fns = objs.map(obj => objectStore => objectStore.put(obj))
+		return this.batch(fns)
 	}
 	delete(key) {
 		// single key
@@ -514,14 +490,8 @@ export class InDBStore {
 
 		// multiple keys
 		const keys = key
-		const keyPah = this.keyPath
-		return this.iterate((obj, cursor) => {
-			const key = parse(obj, keyPah)
-			const index = keys.indexOf(key)
-			if (index > -1) {
-				cursor.delete(key)
-			}
-		})
+		const fns = keys.map(key => objectStore => objectStore.delete(key))
+		return this.batch(fns)
 	}
 	remove(obj) {
 		const keyPah = this.keyPath
@@ -534,14 +504,11 @@ export class InDBStore {
 
 		// multiple objects
 		const objs = obj
-		const keys = objs.map(obj => parse(obj, keyPah))
-		return this.iterate((obj, cursor) => {
+		const fns = objs.map(obj => {
 			const key = parse(obj, keyPah)
-			const index = keys.indexOf(key)
-			if (index > -1) {
-				cursor.delete(key)
-			}
+			return objectStore => objectStore.delete(key)
 		})
+		return this.batch(fns)
 	}
 	clear() {
 		return this.request(objectStore => objectStore.clear(), 'readwrite')
