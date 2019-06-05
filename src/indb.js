@@ -2,7 +2,7 @@ import { parse, modifyError, pipeline } from './utils'
 
 export class InDB {
 	constructor(options = {}) {
-		let { name, version = 1, stores, timeout } = options
+		let { name, version = 1, stores } = options
 
 		if (!name) {
 			throw new Error('[InDB]: you should pass `name` option.')
@@ -60,7 +60,6 @@ export class InDB {
 			}
 		}
 
-		this.timeout = typeof timeout === 'number' && timeout > 100 ? timeout : 100
 		this.using = {}
 	}
 	db() {
@@ -128,77 +127,39 @@ export class InDB_Store {
 		this.store = store
 		this.connection = connection
 
-		this.runtimes = []
+		this.runtime = null
 	}
 
 	transaction(writable = false) {
 		const { name } = this.store
-		const runtimes = this.runtimes
-		const { timeout } = this.connection
 		const mode = writable ? 'readwrite' : 'readonly'
 
-		const createRuntime = () => {
-			const runtime = {
-				mode,
-				status: 1,
-				resolve: () => {},
-				reject: () => {},
-				complete: () => {
-					const index = runtimes.indexOf(runtime)
-					if (index > -1) {
-						// delete this runtime from the queue
-						runtime.status = 0
-						runtimes.splice(index, 1)
-					}
-				},
+		const create = () => this.connection.db().then(db => db.transaction(name, mode))
+		const response = (tx) => new Promise((resolve, reject) => {
+			tx.oncomplete = () => {
+				resolve()
 			}
-			runtime.deferer = new Promise((resolve, reject) => {
-				runtime.resolve = resolve
-				runtime.reject = reject
-			})
-			return runtime
-		}
-		const request = (runtime) => () => {
-			return this.connection.db().then((db) => {
-				const tx = db.transaction(name, mode)
-				tx.oncomplete = () => {
-					runtime.resolve()
-					runtime.complete()
-				}
-				tx.onerror = (e) => {
-					runtime.reject(modifyError(e))
-					runtime.complete()
-				}
-				tx.onabort = (e) => {
-					runtime.resolve() // abort to finish the task
-					runtime.complete()
-				}
-				setTimeout(() => {
-					if (runtime && runtime.status) {
-						runtime.reject(new Error('[InDB]: transaction timeout'))
-						runtime.complete()
-					}
-				}, timeout)
-				return tx
-			})
-		}
-
-		const runtime = createRuntime()
-
-		if (writable) {
-			let prevRuntime = runtimes.length ? runtimes[runtimes.length - 1] : null
-			// push into queue when it is a writable transaction
-			runtimes.push(runtime)
-
-			if (!prevRuntime) {
-				return request(runtime)()
+			tx.onerror = (e) => {
+				reject(modifyError(e))
 			}
+			tx.onabort = (e) => {
+				reject(modifyError(e))
+			}
+		})
+		const request = () => create().then((tx) => {
+			const deferer = response(tx)
+			this.runtime = deferer
 
-			// if there is a runtime in queue, wait until it finish
-			return prevRuntime.deferer.then(request(runtime)).catch(request(runtime))
-		}
+			const release = () => {
+				this.runtime = null
+			}
+			deferer.then(release).catch(release)
 
-		return request(runtime)()
+			return tx
+		})
+
+		const deferer = this.runtime ? this.runtime.then(request).catch(request) : request()
+		return deferer
 	}
 	// =======================================
 	objectStore() {
