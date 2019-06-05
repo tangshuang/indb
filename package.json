@@ -1,6 +1,6 @@
 {
   "name": "indb",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A library to operate IndexedDB easily.",
   "main": "dist/indb.js",
   "scripts": {
