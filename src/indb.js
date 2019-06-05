@@ -16,8 +16,8 @@ export class InDB {
 		this.version = version
 		this.stores = stores
 
-		let request = indexedDB.open(name, version)
 		// update database structure
+		const request = indexedDB.open(name, version)
 		request.onupgradeneeded = (e) => {
 			let db = e.target.result
 			let existStoreNames = Array.from(db.objectStoreNames)
@@ -60,13 +60,12 @@ export class InDB {
 			}
 		}
 
-		this.runtimes = [] // the writable transaction queue
-		this.timeout = timeout || 0
-		this.used = {}
+		this.timeout = timeout
+		this.using = {}
 	}
 	db() {
 		return new Promise((resolve, reject) => {
-			let request = indexedDB.open(this.name, this.version)
+			const request = indexedDB.open(this.name, this.version)
 			request.onerror = (e) => {
 				reject(modifyError(e))
 			}
@@ -75,26 +74,22 @@ export class InDB {
 			}
 		})
 	}
-	use(storeName) {
-		const { stores, version, name } = this
-		const currentStore = stores.find(item => item.name === storeName)
+	use(name) {
+		const currentStore = this.stores.find(item => item.name === name)
 
 		if (!currentStore) {
-			throw new Error(`[InDB]: store ${storeName} is not existing.`)
+			throw new Error(`[InDB]: store ${name} is not existing.`)
 		}
 
 		// use connected store
-		if (this.used[storeName]) {
-			return this.used[storeName]
+		if (this.using[name]) {
+			return this.using[name]
 		}
 
-		const store = new InDBStore({
-			name,
-			version,
-			stores,
+		const store = new InDB_Store({
+			store: currentStore,
+			connection: this,
 		})
-
-		store.currentStore = currentStore
 
 		// if it is a key-value store, append special methods
 		if (currentStore.isKeyValue) {
@@ -104,13 +99,12 @@ export class InDB {
 			store.removeItem = key => store.delete(key)
 		}
 
-		this.used[storeName] = store
+		this.using[name] = store
 
 		return store
 	}
 	close() {
-		this.runtimes = null
-		this.used = null
+		this.using = null
 		this.stores = null
 
 		return this.db().then((db) => {
@@ -119,26 +113,38 @@ export class InDB {
 	}
 }
 
-export class InDBStore extends InDB {
-	use() {
-		throw new Error('[InDBStore]: you can not use `use` method on InDBStore')
-	}
-	close() {
-		throw new Error('[InDBStore]: you can not use `close` method on InDBStore')
+export class InDB_Store {
+	constructor(options = {}) {
+		const { store, connection } = options
+
+		if (typeof store !== 'object' || !store.name || typeof store.name !== 'string') {
+			throw new Error(`[InDB_Store]: options.store should be a store config object.`)
+		}
+
+		if (!(connection instanceof InDB)) {
+			throw new Error(`[InDB_Store]: options.connection should be an instanceof InDB.`)
+		}
+
+		this.store = store
+		this.connection = connection
+
+		this.runtimes = []
 	}
 
 	transaction(writable = false) {
-		let name = this.currentStore.name
-		let mode = writable ? 'readwrite' : 'readonly'
-		let runtimes = this.runtimes
+		const { name } = this.store
+		const runtimes = this.runtimes
+		const { timeout } = this.connection
+		const mode = writable ? 'readwrite' : 'readonly'
+
 		const createRuntime = () => {
-			let runtime = {
+			const runtime = {
 				mode,
 				status: 1,
 				resolve: () => {},
 				reject: () => {},
 				complete: () => {
-					let index = runtimes.indexOf(runtime)
+					const index = runtimes.indexOf(runtime)
 					if (index > -1) {
 						// delete this runtime from the queue
 						runtime.status = 0
@@ -153,8 +159,8 @@ export class InDBStore extends InDB {
 			return runtime
 		}
 		const request = (runtime) => () => {
-			return this.db().then((db) => {
-				let tx = db.transaction(name, mode)
+			return this.connection.db().then((db) => {
+				const tx = db.transaction(name, mode)
 				tx.oncomplete = () => {
 					runtime.resolve()
 					runtime.complete()
@@ -167,19 +173,20 @@ export class InDBStore extends InDB {
 					runtime.resolve() // abort to finish the task
 					runtime.complete()
 				}
-				if (this.timeout > 0) {
+				if (timeout) {
 					setTimeout(() => {
 						if (runtime && runtime.status) {
 							runtime.reject(new Error('[InDB]: transaction timeout'))
 							runtime.complete()
 						}
-					}, this.timeout)
+					}, timeout)
 				}
 				return tx
 			})
 		}
 
-		let runtime = createRuntime()
+		const runtime = createRuntime()
+
 		if (writable) {
 			let prevRuntime = runtimes.length ? runtimes[runtimes.length - 1] : null
 			// push into queue when it is a writable transaction
@@ -188,14 +195,16 @@ export class InDBStore extends InDB {
 			if (!prevRuntime) {
 				return request(runtime)()
 			}
+
 			// if there is a runtime in queue, wait until it finish
 			return prevRuntime.deferer.then(request(runtime)).catch(request(runtime))
 		}
+
 		return request(runtime)()
 	}
 	// =======================================
 	objectStore() {
-		let name = this.currentStore.name
+		const { name } = this.store
 		return this.transaction().then(tx => tx.objectStore(name))
 	}
 	keyPath() {
@@ -210,13 +219,13 @@ export class InDBStore extends InDB {
 	 * idb.request(objectStore => objectStore.get(key)).then(obj => console.log(obj))
 	 */
 	request(prepare, writable = false) {
-		let name = this.currentStore.name
+		const { name } = this.store
 		return this.transaction(writable).then((tx) => {
 			return new Promise((resolve, reject) => {
-				let objectStore = tx.objectStore(name)
-				let request = prepare(objectStore)
+				const objectStore = tx.objectStore(name)
+				const request = prepare(objectStore)
 				request.onsuccess = (e) => {
-					let result = e.target.result
+					const result = e.target.result
 					resolve(result)
 				}
 				request.onerror = (e) => {
@@ -225,16 +234,21 @@ export class InDBStore extends InDB {
 			})
 		})
 	}
-	cursor({ index, range, direction, onTouch, onError, writable }) {
-		let name = this.currentStore.name
+	cursor({ index, range, direction, onTouch, onDone, onError, writable }) {
+		const { name } = this.store
 		return this.transaction(writable).then((tx) => {
-			let objectStore = tx.objectStore(name)
-			let owner = index ? objectStore.index(index) : objectStore
-			let request = owner.openCursor(range, direction)
+			const objectStore = tx.objectStore(name)
+			const owner = index ? objectStore.index(index) : objectStore
+			const request = owner.openCursor(range, direction)
 
 			request.onsuccess = (e) => {
-				let result = e.target.result
-				onTouch(result, tx, owner)
+				const cursor = e.target.result
+				if (cursor) {
+					onTouch(cursor, tx, owner)
+				}
+				else {
+					onDone(cursor, tx, owner)
+				}
 			}
 			request.onerror = (e) => {
 				onError(e)
@@ -246,14 +260,12 @@ export class InDBStore extends InDB {
 			let i = 0
 			this.cursor({
 				onTouch: (cursor) => {
-					if (cursor) {
-						fn(cursor.value, i)
-						i ++
-						cursor.continue()
-					}
-					else {
-						resolve(i)
-					}
+					fn(cursor.value, i)
+					i ++
+					cursor.continue()
+				},
+				onDone: () => {
+					resolve()
 				},
 				onError: (e) => {
 					reject(modifyError(e))
@@ -267,14 +279,86 @@ export class InDBStore extends InDB {
 			this.cursor({
 				direction: 'prev',
 				onTouch: (cursor) => {
-					if (cursor) {
-						fn(cursor.value, i)
+					fn(cursor.value, i)
+					i ++
+					cursor.continue()
+				},
+				onDone: () => {
+					resolve()
+				},
+				onError: (e) => {
+					reject(modifyError(e))
+				},
+			})
+		})
+	}
+	modify(fn) {
+		return new Promise((resolve, reject) => {
+			let i = 0
+			const res = {
+				success: [],
+				failure: [],
+			}
+			this.keyPath().then((keyPah) => {
+				this.cursor({
+					writable: true,
+					onTouch: (cursor) => {
+						const value = cursor.value
+						const bool = fn(value, i)
+
+						if (bool) {
+							const request = cursor.update(value)
+							const key = parse(value, keyPah)
+							request.onsuccess = () => {
+								res.success.push(key)
+							}
+							request.onerror = (e) => {
+								res.failure.push(key)
+							}
+						}
+
 						i ++
 						cursor.continue()
+					},
+					onDone: () => {
+						resolve(res)
+					},
+					onError: (e) => {
+						reject(modifyError(e))
+					},
+				})
+			})
+		})
+	}
+	eliminate(fn) {
+		return new Promise((resolve, reject) => {
+			let i = 0
+			const res = {
+				success: [],
+				failure: [],
+			}
+			this.cursor({
+				writable: true,
+				onTouch: (cursor) => {
+					const value = cursor.value
+					const bool = fn(value, i)
+
+					if (bool) {
+						const request = cursor.delete()
+						const key = parse(value, keyPah)
+						request.onsuccess = () => {
+							res.success.push(key)
+						}
+						request.onerror = (e) => {
+							res.failure.push(key)
+						}
 					}
-					else {
-						resolve(i)
-					}
+
+					i ++
+					cursor.continue()
+				},
+				onDone: () => {
+					resolve(res)
 				},
 				onError: (e) => {
 					reject(modifyError(e))
@@ -319,7 +403,7 @@ export class InDBStore extends InDB {
 			if (offset < 0) {
 				direction = 'prev'
 				count = Math.min(count, -offset)
-				start = -(offset + count)
+				start = -(offset + count) || 0
 				end = start + count
 			}
 
@@ -333,23 +417,22 @@ export class InDBStore extends InDB {
 			this.cursor({
 				direction,
 				onTouch: (cursor, tx) => {
-					if (cursor) {
-						if (i < start) {
-							cursor.continue()
-						}
-						else if (i < end) {
-							results.push(cursor.value)
-							cursor.continue()
-						}
-						else {
-							success(results)
-							tx.abort()
-						}
+					if (i < start) {
 						i ++
+						cursor.continue()
+					}
+					else if (i < end) {
+						results.push(cursor.value)
+						i ++
+						cursor.continue()
 					}
 					else {
 						success(results)
+						tx.abort()
 					}
+				},
+				onDone: () => {
+					success(results)
 				},
 				onError: (e) => {
 					reject(modifyError(e))
@@ -386,34 +469,34 @@ export class InDBStore extends InDB {
 				index: key,
 				range,
 				onTouch: (cursor, tx, owner) => {
-					if (cursor) {
-						let targetObj = cursor.value
-						let keyPath = owner.keyPath
-						let targetValue = parse(targetObj, keyPath)
-						if (compare === '!=') {
-							if (targetValue !== value) {
-								results.push(targetObj)
-							}
-						}
-						else if (compare === '%') {
-							if (typeof targetValue == 'string' && targetValue.indexOf(value) > -1) {
-								results.push(targetObj)
-							}
-						}
-						else if (compare === 'in') {
-							if (Array.isArray(value) && value.indexOf(targetValue) > -1) {
-								results.push(targetObj)
-							}
-						}
-						else {
+					let targetObj = cursor.value
+					let keyPath = owner.keyPath
+					let targetValue = parse(targetObj, keyPath)
+
+					if (compare === '!=') {
+						if (targetValue !== value) {
 							results.push(targetObj)
 						}
-						cursor.continue()
-						i ++
+					}
+					else if (compare === '%') {
+						if (typeof targetValue == 'string' && targetValue.indexOf(value) > -1) {
+							results.push(targetObj)
+						}
+					}
+					else if (compare === 'in') {
+						if (Array.isArray(value) && value.indexOf(targetValue) > -1) {
+							results.push(targetObj)
+						}
 					}
 					else {
-						resolve(results)
+						results.push(targetObj)
 					}
+
+					i ++
+					cursor.continue()
+				},
+				onDone: () => {
+					resolve(results)
 				},
 				onError: (e) => {
 					reject(modifyError(e))
@@ -422,7 +505,7 @@ export class InDBStore extends InDB {
 		})
 	}
 	select(conditions) {
-		let currentStore = this.currentStore
+		let currentStore = this.store
 		let indexes = currentStore.indexes || []
 		let indexesMapping = {}
 		indexes.forEach((item) => {
@@ -498,7 +581,7 @@ export class InDBStore extends InDB {
 	}
 	delete(key) {
 		// delete multiple
-		if (Array.isArray(keys)) {
+		if (Array.isArray(key)) {
 			const keys = key
 			return pipeline(keys, (key) => this.delete(key))
 		}

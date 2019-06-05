@@ -47,7 +47,7 @@ export function parse(obj, path) {
 }
 
 export function modifyError(e) {
-  e.message = '[HelloIndexedDB]: ' + e.message
+  e.message = '[IndexedDB]: ' + e.message
   return e
 }
 
