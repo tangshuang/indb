@@ -85,7 +85,7 @@ export class InDB {
 			return this.using[name]
 		}
 
-		const store = new InDB_Store({
+		const store = new InDBStore({
 			store: currentStore,
 			connection: this,
 		})
@@ -112,54 +112,26 @@ export class InDB {
 	}
 }
 
-export class InDB_Store {
+export class InDBStore {
 	constructor(options = {}) {
 		const { store, connection } = options
 
 		if (typeof store !== 'object' || !store.name || typeof store.name !== 'string') {
-			throw new Error(`[InDB_Store]: options.store should be a store config object.`)
+			throw new Error(`[InDBStore]: options.store should be a store config object.`)
 		}
 
 		if (!(connection instanceof InDB)) {
-			throw new Error(`[InDB_Store]: options.connection should be an instanceof InDB.`)
+			throw new Error(`[InDBStore]: options.connection should be an instanceof InDB.`)
 		}
 
 		this.store = store
 		this.connection = connection
-
-		this.runtime = null
 	}
 
 	transaction(writable = false) {
 		const { name } = this.store
 		const mode = writable ? 'readwrite' : 'readonly'
-
-		const create = () => this.connection.db().then(db => db.transaction(name, mode))
-		const response = (tx) => new Promise((resolve, reject) => {
-			tx.oncomplete = () => {
-				resolve()
-			}
-			tx.onerror = (e) => {
-				reject(modifyError(e))
-			}
-			tx.onabort = (e) => {
-				reject(modifyError(e))
-			}
-		})
-		const request = () => create().then((tx) => {
-			const deferer = response(tx)
-			this.runtime = deferer
-
-			const release = () => {
-				this.runtime = null
-			}
-			deferer.then(release).catch(release)
-
-			return tx
-		})
-
-		const deferer = this.runtime ? this.runtime.then(request).catch(request) : request()
-		return deferer
+		return this.connection.db().then(db => db.transaction(name, mode))
 	}
 	// =======================================
 	objectStore() {
@@ -210,124 +182,90 @@ export class InDB_Store {
 				}
 			}
 			request.onerror = (e) => {
-				onError(e)
+				onError(modifyError(e))
 			}
 		})
 	}
 	each(fn) {
 		return new Promise((resolve, reject) => {
-			let i = 0
-			this.cursor({
-				onTouch: (cursor) => {
-					fn(cursor.value, i)
-					i ++
-					cursor.continue()
-				},
-				onDone: () => {
-					resolve()
-				},
-				onError: (e) => {
-					reject(modifyError(e))
-				},
-			})
-		})
-	}
-	reverse(fn) {
-		return new Promise((resolve, reject) => {
-			let i = 0
-			this.cursor({
-				direction: 'prev',
-				onTouch: (cursor) => {
-					fn(cursor.value, i)
-					i ++
-					cursor.continue()
-				},
-				onDone: () => {
-					resolve()
-				},
-				onError: (e) => {
-					reject(modifyError(e))
-				},
-			})
-		})
-	}
-	modify(fn) {
-		return new Promise((resolve, reject) => {
-			let i = 0
-			const res = {
-				success: [],
-				failure: [],
-			}
 			this.keyPath().then((keyPah) => {
 				this.cursor({
-					writable: true,
 					onTouch: (cursor) => {
-						const value = cursor.value
-						const bool = fn(value, i)
-
-						if (bool) {
-							const request = cursor.update(value)
-							const key = parse(value, keyPah)
-							request.onsuccess = () => {
-								res.success.push(key)
-							}
-							request.onerror = (e) => {
-								res.failure.push(key)
-							}
-						}
-
-						i ++
+						const obj = cursor.value
+						const key = parse(obj, keyPah)
+						fn(obj, key)
 						cursor.continue()
 					},
 					onDone: () => {
-						resolve(res)
+						resolve()
 					},
 					onError: (e) => {
-						reject(modifyError(e))
+						reject(e)
 					},
 				})
 			})
 		})
 	}
-	eliminate(fn) {
+	reverse(fn) {
 		return new Promise((resolve, reject) => {
-			let i = 0
-			const res = {
-				success: [],
-				failure: [],
-			}
-			this.cursor({
-				writable: true,
-				onTouch: (cursor) => {
-					const value = cursor.value
-					const bool = fn(value, i)
-
-					if (bool) {
-						const request = cursor.delete()
-						const key = parse(value, keyPah)
-						request.onsuccess = () => {
-							res.success.push(key)
-						}
-						request.onerror = (e) => {
-							res.failure.push(key)
-						}
-					}
-
-					i ++
-					cursor.continue()
-				},
-				onDone: () => {
-					resolve(res)
-				},
-				onError: (e) => {
-					reject(modifyError(e))
-				},
+			this.keyPath().then((keyPah) => {
+				this.cursor({
+					direction: 'prev',
+					onTouch: (cursor) => {
+						const obj = cursor.value
+						const key = parse(obj, keyPah)
+						fn(obj, key)
+						cursor.continue()
+					},
+					onDone: () => {
+						resolve()
+					},
+					onError: (e) => {
+						reject(e)
+					},
+				})
+			})
+		})
+	}
+	iterate(fn) {
+		return new Promise((resolve, reject) => {
+			this.keyPath().then((keyPah) => {
+				this.cursor({
+					writable: true,
+					onTouch: (cursor) => {
+						const obj = cursor.value
+						const key = parse(obj, keyPah)
+						fn(obj, key, cursor)
+						cursor.continue()
+					},
+					onDone: () => {
+						resolve()
+					},
+					onError: (e) => {
+						reject(e)
+					},
+				})
 			})
 		})
 	}
 	// ==========================================
 	get(key) {
-		return this.request(objectStore => objectStore.get(key))
+		// single key
+		if (!Array.isArray(key)) {
+			return this.request(objectStore => objectStore.get(key))
+		}
+
+		// multiple keys
+		const keys = key
+		const results = []
+		return this.keyPath().then((keyPah) => this.each((obj) => {
+			const key = parse(obj, keyPah)
+			if (keys.indexOf(key) > -1) {
+				results.push(obj)
+			}
+		}).then(() => {
+			return results
+		}))
 	}
 	keys() {
 		return this.request(objectStore => objectStore.getAllKeys())
@@ -394,7 +332,7 @@ export class InDB_Store {
 					success(results)
 				},
 				onError: (e) => {
-					reject(modifyError(e))
+					reject(e)
 				},
 			})
 		})
@@ -421,8 +359,8 @@ export class InDB_Store {
 					return IDBKeyRange.only(value)
 			}
 		}())
-		let results = []
-		let i = 0
+
+		const results = []
 		return new Promise((resolve, reject) => {
 			this.cursor({
 				index: key,
@@ -451,14 +389,13 @@ export class InDB_Store {
 						results.push(targetObj)
 					}
 
-					i ++
 					cursor.continue()
 				},
 				onDone: () => {
 					resolve(results)
 				},
 				onError: (e) => {
-					reject(modifyError(e))
+					reject(e)
 				},
 			})
 		})
@@ -529,37 +466,108 @@ export class InDB_Store {
 			if (determine(value)) {
 				results.push(value)
 			}
-		}).then(() => results)
+		}).then(() => {
+			return results
+		})
 	}
 	// =====================================
 	add(obj) {
 		return this.request(objectStore => objectStore.add(obj), 'readwrite')
 	}
 	put(obj) {
-		return this.request(objectStore => objectStore.put(obj), 'readwrite')
-	}
-	delete(key) {
-		// delete multiple
-		if (Array.isArray(key)) {
-			const keys = key
-			return pipeline(keys, (key) => this.delete(key))
-		}
-
-		return this.request(objectStore => objectStore.delete(key), 'readwrite')
-	}
-	remove(obj) {
-		// remove multiple
+		// multiple objects
 		if (Array.isArray(obj)) {
 			const objs = obj
-			return pipeline(objs, (obj) => this.remove(obj))
+			const { name } = this.store
+			return this.transaction(true).then((tx) => {
+				const promises = []
+				objs.forEach((obj) => {
+					const p = new Promise((resolve, reject) => {
+						const objectStore = tx.objectStore(name)
+						const request = objectStore.put(obj)
+						request.onsuccess = (e) => {
+							const result = e.target.result
+							resolve(result)
+						}
+						request.onerror = (e) => {
+							reject(modifyError(e))
+						}
+					})
+					promises.push(p)
+				})
+				return Promise.all(promises)
+			})
 		}
 
+		// single object
+		return this.request(objectStore => objectStore.put(obj), 'readwrite')
+	}
+	update(obj) {
+		// single object
+		if (!Array.isArray(obj)) {
+			return this.keyPath().then((keyPah) => {
+				const key = parse(obj, keyPah)
+				const item = this.get(key)
+				if (item) {
+					return this.put(obj)
+				}
+			})
+		}
+
+		// multiple objects
+		const objs = obj
 		return this.keyPath().then((keyPah) => {
-			let key = parse(obj, keyPah)
-			if (key === undefined) {
-				throw new Error(`[InDB]: your passed object to remove() does not contain keyPath '${keyPah}'.`)
+			const keys = objs.map(obj => parse(obj, keyPah))
+			return this.iterate((obj, key, cursor) => {
+				const index = keys.indexOf(key)
+				if (index > -1) {
+					const target = objs[index]
+					const request = cursor.update(target)
+					// request.onsuccess = () => {}
+					// request.onerror = (e) => {}
+				}
+			})
+		})
+	}
+	delete(key) {
+		// single key
+		if (!Array.isArray(key)) {
+			return this.request(objectStore => objectStore.delete(key), 'readwrite')
+		}
+
+		// multiple keys
+		const keys = key
+		return this.iterate((obj, key, cursor) => {
+			const index = keys.indexOf(key)
+			if (index > -1) {
+				const request = cursor.delete(key)
+				// request.onsuccess = () => {}
+				// request.onerror = (e) => {}
 			}
-			return this.delete(key)
+		})
+	}
+	remove(obj) {
+		// single obj
+		if (!Array.isArray(obj)) {
+			return this.keyPath().then((keyPah) => {
+				const key = parse(obj, keyPah)
+				console.log(key)
+				return this.delete(key)
+			})
+		}
+
+		// multiple objects
+		const objs = obj
+		return this.keyPath().then((keyPah) => {
+			const keys = objs.map(obj => parse(obj, keyPah))
+			return this.iterate((obj, key, cursor) => {
+				const index = keys.indexOf(key)
+				if (index > -1) {
+					const request = cursor.delete(key)
+					// request.onsuccess = () => {}
+					// request.onerror = (e) => {}
+				}
+			})
 		})
 	}
 	clear() {

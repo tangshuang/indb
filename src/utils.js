@@ -47,7 +47,8 @@ export function parse(obj, path) {
 }
 
 export function modifyError(e) {
-  e.message = '[IndexedDB]: ' + e.message
+  const { message } = e
+  e.message = message.indexOf('[IndexedDB]') === -1 ? '[IndexedDB]: ' + message : message
   return e
 }
 
@@ -66,7 +67,7 @@ export function pipeline(items, fn) {
         return
       }
       let item = items[i]
-      return Promise.resolve().then(() => fn(item, i)).then(through).catch(reject)
+      Promise.resolve().then(() => fn(item, i)).then(() => { i ++ }).then(through).catch(reject)
     }
     return through()
   })

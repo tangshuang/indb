@@ -101,15 +101,76 @@ it('put', async () => {
     await studentstore.put({ id: '5', name: 'othe', age: 23 })
 })
 
+it('put multiple', async () => {
+    await studentstore.put([
+        { id: '6', name: 'xida', age: 10 },
+        { id: '7', name: 'himen', age: 11 },
+    ])
+    const count = await studentstore.count()
+    expect(count).to.equal(7)
+})
+
+it('update', async () => {
+    await studentstore.update({ id: '6', name: 'soda', age: 11 })
+    const item = await studentstore.get('6')
+    expect(item.name).to.equal('soda')
+    expect(item.age).to.equal(11)
+})
+
+it('update multiple', async () => {
+    await studentstore.update([
+        { id: '6', name: 'soda', age: 12 },
+        { id: '7', name: 'himen', age: 14 },
+    ])
+    const soda = await studentstore.get('6')
+    expect(soda.age).to.equal(12)
+    const himen = await studentstore.get('7')
+    expect(himen.age).to.equal(14)
+})
+
 it('delete', async () => {
     await studentstore.delete('1')
     let obj = await studentstore.get('1')
     expect(obj).to.be.undefined
 })
 
+it('delete multiple', async () => {
+    await studentstore.delete(['6', '7'])
+    const count = await studentstore.count()
+    expect(count).to.equal(4)
+})
+
+it('remove', async () => {
+    await studentstore.put({ id: '10', name: 'tokyo' })
+    const item = await studentstore.get('10')
+    expect(item.name).to.equal('tokyo')
+    await studentstore.remove(item)
+    const item2 = studentstore.get('10')
+    expect(item2.name).to.equal(undefined)
+})
+
+it('remove multiple', async () => {
+    await studentstore.put([
+        { id: '11', name: 'tokyo' },
+        { id: '12', name: 'tokyo' },
+    ])
+    const count1 = await studentstore.count()
+    await studentstore.remove([
+        { id: '11', name: 'tokyo' },
+        { id: '12', name: 'tokyo' },
+    ])
+    const count2 = await studentstore.count()
+    expect(count1 - 2).to.equal(count2)
+})
+
 it('get', async () => {
     let obj = await studentstore.get('3')
     expect(obj.name).to.equal('tomy')
+})
+
+it('get multiple', async () => {
+    let objs = await studentstore.get(['3', '4', '5'])
+    expect(objs.length).to.equal(3)
 })
 
 it('find', async () => {
