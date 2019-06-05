@@ -60,7 +60,7 @@ export class InDB {
 			}
 		}
 
-		this.timeout = timeout
+		this.timeout = typeof timeout === 'number' && timeout > 100 ? timeout : 100
 		this.using = {}
 	}
 	db() {
@@ -173,14 +173,12 @@ export class InDB_Store {
 					runtime.resolve() // abort to finish the task
 					runtime.complete()
 				}
-				if (timeout) {
-					setTimeout(() => {
-						if (runtime && runtime.status) {
-							runtime.reject(new Error('[InDB]: transaction timeout'))
-							runtime.complete()
-						}
-					}, timeout)
-				}
+				setTimeout(() => {
+					if (runtime && runtime.status) {
+						runtime.reject(new Error('[InDB]: transaction timeout'))
+						runtime.complete()
+					}
+				}, timeout)
 				return tx
 			})
 		}
