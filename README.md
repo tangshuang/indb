@@ -5,12 +5,16 @@ A library to operate IndexedDB easily.
 ## Install
 
 ```
-npm install --save indb
+npm i indb
 ```
 
-## Usage
+ES:
 
-ES6:
+```js
+import InDB from 'indb/src/indb.js'
+```
+
+Webpack:
 
 ```js
 import InDB from 'indb'
@@ -22,28 +26,16 @@ CommonJS:
 const { InDB } = require('indb')
 ```
 
-AMD:
-
-```html
-<script src="dist/indb.js"></script>
-<script>
-define(function(require) {
-  const { InDB } = require('indb')
-  // ...
-})
-</script>
-```
-
-Normal Browsers:
+UMD:
 
 ```html
 <script src="dist/indb.js"></script>
 <script>
 const { InDB } = window['indb']
-</scirpt>
+</script>
 ```
 
-How to use:
+## Usage
 
 ```js
 const idb = new InDB({
@@ -65,9 +57,11 @@ const store1 = idb.use('store1')
 const store2 = idb.use('store2')
 
 ;(async function() {
+  // put and get data
   await store1.put({ id: 'key1', value: 'value2' })
-  let obj = await store1.get('key1')
+  const obj = await store1.get('key1')
 
+  // use like key-value storage (as localStorage do)
   await store2.setItem('key', 'value')
 })()
 ```
@@ -75,28 +69,21 @@ const store2 = idb.use('store2')
 ## InDB
 
 ```js
-const idb = new InDB({
-  name: 'mydb',
-  version: 1,
-  stores: [
-    {
-      name: 'store1',
-      keyPath: 'id',
-    },
-    {
-      name: 'store2',
-      isKeyValue: true,
-    },
-  ],
-})
+const idb = new InDB(options)
 ```
 
 **options**
 
-- name: the name of a indexedDB database. You can see it in your browser dev-tools.
-- version: the version of this indexedDB instance.
-- stores: an array to define objectStores. At least one store config should be passed.
-- timeout: timeout of execute, if an execution out of time, the request throw rejection
+- name: string, the name of a indexedDB database
+- version: positive int, the version of this indexedDB instance.
+- stores: array, to define objectStores
+  - name: string, store name
+  - keyPath: string, store primary keyPath
+  - indexes: array, to define store index
+    - name: string, index name
+    - keyPath: string, index keyPath
+    - unique: boolean, whether the keyPath value should be unique
+  - isKeyValue: boolean, whether to make it a key-value store, if set true, other options will be ignored
 
 Example:
 
@@ -132,17 +119,16 @@ const options = {
     store1,
     store2,
   ],
-  use: 'store1',
 }
 const idb = new InDB(options)
 ```
 
-### db()
+### connect()
 
 Get current database.
 
 ```js
-let db = await idb.db()
+let db = await idb.connect()
 ```
 
 ### close()
@@ -161,14 +147,11 @@ Remember to close database connect if you do not use it any more.
 
 _not async function_
 
-Switch to another store, return a new instance of InDB.
+Return a new instance of InDBStore.
 
 ```js
-let store2 = idb.use('store2')
+const store2 = idb.use('store2')
 ```
-
-`use` method is the only method which is not an async function.
-Here, you will get an instance of `InDBStore`.
 
 ## InDBStore
 
@@ -178,79 +161,57 @@ After you create an InDB instance, you should use a store to operate data.
 const store = idb.use('storeName')
 ```
 
-### get(key)
+### GET DATA
 
-Get a object from indexedDB by its keyPath.
+This part help you to get data from indexedDB.
 
-```js
-let obj = await store.get('key1')
-// { id: 'key1', value: 'value1' }
-```
+#### get
 
-### add(obj)
-
-Append a object into your database.
-Notice, obj's properties should contain keyPath.
-If obj's keyPath exists in the objectStore, an error will be thrown.
-So use `put` instead as possible.
-
-### put(obj)
-
-Update a object in your database.
-Notice, your item's properties should contain keyPath.
-If the object does not exist, it will be added into the database.
-So it is better to use `put` instead of `add` unless you know what you are doing.
-
-### delete(key)
-
-Delete a object by its keyPath.
+Get an object by its keyPath.
 
 ```js
-await store.delete('1000')
+const obj = await store.get('keyPath')
+// { id: 'keyPath', value: 'value' }
 ```
 
-### clear()
+#### find
 
-Delete all data. Remember to backup your data before you clean.
-
-### find(indexName, value)
-
-Get the first object whose index name is `key` and value is `value`.
-Notice, `key` is a indexName.
+Find an object by `index` (based) and value.
 
 ```js
-let obj = await store.find('name', 'tomy')
-// { id: '1001', name: 'tomy', age: 10 }
+const obj = await store.find('indexName', 'targetValue')
+// { id: 'keyPath', indexName: 'targetValue' }
 ```
 
-If you find a key which is not in indexes, no results will return.
+#### query
 
-### query(indexName, value, compare)
-
-Get objects by one name of its indexes key and certain value.
-Notice, `key` is a indexName.
-i.e.
+Get objects by `index` (based) and value and comparation symbol.
 
 ```js
-let objs = await store.query('name', 'GoFei')
-// [{ id: '1002', name: 'GoFei', age: 10 }]
-// if there are some other records with name equals GoFei, they will be put in the array
+const objs = await store.query('age', 10, '>')
+// [
+//   { id: '1002', name: 'GoFei', age: 10 },
+//   { id: '1003', name: 'Ximen', age: 11 },
+// ]
 ```
 
-In which, `name` is an index name in your `options.indexes`, not index key, remember this. So you'd better to pass the name and the key same value when you creat database.
+Supported symbols:
 
-Return an array, which contains objects with key equals value.
-If you give a index name which is not in indexes options, no results will return.
+- '>'
+- '>='
+- '<'
+- '<='
+- '=': equal, default
+- '!=': not equal
+- '%': contains substring, LIKE in sql
+- 'in': one of the given values, the second parameter should be an array
 
-**compare**
+```js
+store.query('name', 'Go', '%') // obj.name.indexOf('Go') > -1
+store.query('age', [10, 11], 'in') // [10, 11].includes(obj.age)
+```
 
-Choose from `>` `>=` `<` `<=` `=` `!=` `%` `in`.
-`%` means 'LIKE', only used for string search.
-`in` means 'IN', value should be an array.
-
-Notice `!=` will use `!==`, `=` will use `===`, so you should pass right typeof of value.
-
-### select([{ keyPath, value, compare, optional }])
+#### select
 
 Select objects with multiple conditions. Pass conditions as an array, each condition item contains:
 
@@ -263,19 +224,19 @@ Examples:
 
 ```js
 // to find objects which amount>10 AND color='red'
-let objs = await store.select([
+store.select([
   { keyPath: 'amount', value: 10, compare: '>' },
   { keyPath: 'color', value: 'red' },
 ])
 
 // to find objects which amount>10 OR amount<6
-let objs = await store.select([
+store.select([
   { keyPath: 'amount', value: 10, compare: '>', optional: true },
   { keyPath: 'amount', value: 6, compare: '<', optional: true },
 ])
 
 // to find objects which amount>10 AND (color='red' OR color='blue')
-let objs = await store.select([
+store.select([
   { keyPath: 'amount', value: 10, compare: '>' },
   { keyPath: 'color', value: 'red', optional: true },
   { keyPath: 'color', value: 'blue', optional: true },
@@ -283,22 +244,21 @@ let objs = await store.select([
 ```
 
 NOTICE: the final logic is `A AND B AND C AND (D OR E OR F)`.
-
 NOTICE: `select` do NOT use index to query data, it will traserve all data in database.
 
-### all()
+#### all
 
-Get all records from your objectStore.
+Get all records.
 
-### first()
+#### first
 
-Get the first record from current objectStore.
+Get the first record.
 
-### last()
+#### last
 
-Get the last record from current objectStore.
+Get the last record.
 
-### some(count, offset)
+#### some
 
 Get some records from your objectStore by count.
 
@@ -306,53 +266,180 @@ Get some records from your objectStore by count.
 - offset: from which index to find, default 0, if you set it to be smaller then 0, it will find from the end
 
 ```js
-let objs = await store.some(3) // get the first 3 records from db
-let objs = await store.some(3, 5) // get records whose index in [5, 6, 7] from db
-let objs = await store.some(2, -3) // get records whose index in [-3, -2] from db
+store.some(3) // get the first 3 records
+store.some(3, 5) // get records whose index in [5, 6, 7]
+store.some(2, -3) // get records whose index in [-3, -2]
 ```
 
-### keys()
+#### keys
 
-Get all primary keys from your objectStore.
+Get all primary keys.
 
-### count()
+#### count
 
 Get all records count.
 
-## Special Methods
+### MODIFY DATA
 
-### each(fn)
+#### add
 
-Iterate with cursor:
+Append an object into your database.
+Notice, obj's properties should contain keyPath.
+If obj's keyPath exists in the objectStore, an error will be thrown.
+So use `put` instead as possible.
+
+#### put
+
+Update an object in your database.
+Notice, your item's properties should contain keyPath.
+If the object does not exist, it will be added into the database.
+
+#### delete
+
+Delete an object by its keyPath.
 
 ```js
-await store.each((item, i) => {
+await store.delete('1000')
+```
+
+#### remove
+
+Delete an object by an object.
+
+```js
+await store.remove({ id: '1000' })
+```
+
+Use it when you do not know which is its keyPath.
+
+#### clear
+
+Delete all data.
+Remember to backup your data before you clean.
+
+### TRASERVE DATA
+
+#### each
+
+Traserve data from begin to end.
+
+```js
+store.each((obj) => {
+  // ...
 })
 ```
 
-- item: the object at the position of cursor
-- i
+#### reverse
 
-### reverse(fn)
+Traserve data from end to begin.
 
-Very like `each` method, but iterate from end to begin.
+### BATCH MODIFY
 
-### objectStore()
-
-Get current objectStore with 'readonly' mode.
+`add` `put` `delete` and `remove` have batch ability. You just need to pass an array.
 
 ```js
-let objectStore = await store.objectStore()
-let name = objectStore.name
+store.put([
+  { id: '1', name: 'a' },
+  { id: '2', name: 'b' },
+])
 ```
 
-### keyPath()
+### ATOMIC OPERATION
 
-Get keyPath.
+Some methods are provided to help developers to get atomic API of indexedDB.
+However, if you do not know what it do, don't use it.
+
+#### transaction
+
+Create a transaction.
 
 ```js
-let keyPath = await store.keyPath()
+const tx = await store.transaction()
 ```
+
+### objectStore
+
+Get the objectStore so that you can create a request.
+
+```js
+const objectStore = await store.objectStore()
+const request = objectStore.put({ ... })
+```
+
+#### cursor
+
+Create a cursor to traserve data.
+
+```js
+await store.cursor({
+  index: 'indexName',
+  ranage: null, // [IDBKeyRange](https://developer.mozilla.org/en-US/docs/Web/API/IDBKeyRange)
+  direction: 'next', // next or prev
+  writable: false, // true or false
+  onTouch, // function, (cursor, owner) => {}, `owner` is the owner of cursor (objectStore or index)
+  onDone, // function
+  onError, // function
+})
+```
+
+#### iterate
+
+Create a iterator to traserve data.
+
+```js
+await store.iterate((cursor, next, stop) => {
+  // ...
+}, {
+  writable: false,
+  direction: 'next',
+})
+```
+
+When you invoke `stop`, the promise resolve.
+
+#### request
+
+Create a request.
+
+```js
+await store.request(objectStore => objectStore.add(obj), true) // the second parameter is writable
+```
+
+#### batch
+
+Create a task to run batch requests.
+
+```js
+store.batch([
+  objectStore => objectStore.put(obj1),
+  objectStore => objectStore.put(obj2),
+  objectStore => objectStore.remove(obj3),
+], {
+  writable: true,
+})
+```
+
+### KEY-VALUE STORE
+
+If a store is defined as a key-value store by InDB options, it will have Storage APIs: `setItem` `getItem` `removeItem` `key`.
+
+```js
+const idb = new InDB({
+  name: 'SOME_DB',
+  version: 1,
+  stores: [
+    {
+      name: 'kv_store',
+      isKeyValue: true,
+    },
+  ],
+})
+const kv = idb.use('kv_store')
+
+kv.setItem('a', 'xxxx')
+```
+
+Notice, normal stores do not have these apis.
 
 ## Storage
 

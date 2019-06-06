@@ -153,18 +153,18 @@ export class InDBStore {
 			})
 		})
 	}
-	cursor(options, writable = false) {
-		const { index, range, direction, onTouch, onDone, onError } = options
+	cursor(options) {
+		const { index, range, direction, onTouch, onDone, onError, writable = false } = options
 		return this.objectStore(writable).then((objectStore) => {
 			const owner = index ? objectStore.index(index) : objectStore
 			const request = owner.openCursor(range, direction)
 			request.onsuccess = (e) => {
 				const cursor = e.target.result
 				if (cursor) {
-					onTouch(cursor, tx, owner)
+					onTouch(cursor, owner)
 				}
 				else {
-					onDone(cursor, tx, owner)
+					onDone(cursor, owner)
 				}
 			}
 			request.onerror = (e) => {
@@ -172,50 +172,18 @@ export class InDBStore {
 			}
 		})
 	}
-
-	// =======================================
-
-	each(fn) {
+	iterate(fn, options = {}) {
+		const { writable = false, direction = 'next' } = options
 		return new Promise((resolve, reject) => {
 			this.cursor({
-				onTouch: (cursor) => {
-					const obj = cursor.value
-					fn(obj)
-					cursor.continue()
-				},
-				onDone: () => {
-					resolve()
-				},
-				onError: (e) => {
-					reject(e)
-				},
-			})
-		})
-	}
-	reverse(fn) {
-		return new Promise((resolve, reject) => {
-			this.cursor({
-				direction: 'prev',
-				onTouch: (cursor) => {
-					const obj = cursor.value
-					fn(obj)
-					cursor.continue()
-				},
-				onDone: () => {
-					resolve()
-				},
-				onError: (e) => {
-					reject(e)
-				},
-			})
-		})
-	}
-	iterate(fn, writable = true) {
-		return new Promise((resolve, reject) => {
-			this.cursor({
-				onTouch: (cursor, tx) => {
+				writable,
+				direction,
+				onTouch: (cursor, owner) => {
 					const next = () => cursor.continue()
-					const stop = () => tx.abort()
+					const stop = () => {
+						owner.transaction.abort()
+						resolve()
+					}
 					fn(cursor, next, stop)
 				},
 				onDone: () => {
@@ -224,10 +192,11 @@ export class InDBStore {
 				onError: (e) => {
 					reject(e)
 				},
-			}, writable)
+			})
 		})
 	}
-	batch(fns, writable = true) {
+	batch(fns, options = {}) {
+		const { writable = true } = options
 		return this.transaction(writable).then((tx) => {
 			const name = this.name
 			const promises = []
@@ -252,8 +221,6 @@ export class InDBStore {
 	// ==========================================
 
 	get(key) {
-		const keyPah = this.keyPath
-
 		// single key
 		if (!Array.isArray(key)) {
 			return this.request(objectStore => objectStore.get(key))
@@ -262,7 +229,7 @@ export class InDBStore {
 		// multiple keys
 		const keys = key
 		const fns = keys.map(key => objectStore => objectStore.get(key))
-		return this.batch(fns, false)
+		return this.batch(fns, { writable: false })
 	}
 	keys() {
 		return this.request(objectStore => objectStore.getAllKeys())
@@ -274,6 +241,20 @@ export class InDBStore {
 		return this.request(objectStore => objectStore.count())
 	}
 	// ==========================================
+	each(fn) {
+		return this.iterate((cursor, next) => {
+			const obj = cursor.value
+			fn(obj)
+			next()
+		})
+	}
+	reverse(fn) {
+		return this.iterate((cursor, next) => {
+			const obj = cursor.value
+			fn(obj)
+			next()
+		}, { direction: 'prev' })
+	}
 	some(count = 10, offset = 0) {
 		return new Promise((resolve, reject) => {
 			let results = []
@@ -291,37 +272,25 @@ export class InDBStore {
 				end = start + count
 			}
 
-			const success = (results) => {
+			this.iterate((cursor, next, stop) => {
+				if (i < start) {
+					i ++
+					next()
+				}
+				else if (i < end) {
+					results.push(cursor.value)
+					i ++
+					next()
+				}
+				else {
+					stop()
+				}
+			}, { direction }).then(() => {
 				if (offset < 0) {
 					results.reverse()
 				}
 				resolve(results)
-			}
-
-			this.cursor({
-				direction,
-				onTouch: (cursor, tx) => {
-					if (i < start) {
-						i ++
-						cursor.continue()
-					}
-					else if (i < end) {
-						results.push(cursor.value)
-						i ++
-						cursor.continue()
-					}
-					else {
-						success(results)
-						tx.abort()
-					}
-				},
-				onDone: () => {
-					success(results)
-				},
-				onError: (e) => {
-					reject(e)
-				},
-			})
+			}).catch(reject)
 		})
 	}
 	first() {
@@ -359,7 +328,7 @@ export class InDBStore {
 			this.cursor({
 				index: key,
 				range,
-				onTouch: (cursor, tx, owner) => {
+				onTouch: (cursor, owner) => {
 					let targetObj = cursor.value
 					let keyPath = owner.keyPath
 					let targetValue = parse(targetObj, keyPath)
@@ -457,9 +426,9 @@ export class InDBStore {
 		}
 
 		const results = []
-		return this.each((value) => {
-			if (determine(value)) {
-				results.push(value)
+		return this.each((obj) => {
+			if (determine(obj)) {
+				results.push(obj)
 			}
 		}).then(() => {
 			return results
@@ -469,7 +438,13 @@ export class InDBStore {
 	// =====================================
 
 	add(obj) {
-		return this.request(objectStore => objectStore.add(obj), 'readwrite')
+		if (!Array.isArray(obj)) {
+			return this.request(objectStore => objectStore.add(obj), 'readwrite')
+		}
+
+		const objs = obj
+		const fns = objs.map(obj => objectStore => objectStore.add(obj))
+		return this.batch(fns)
 	}
 	put(obj) {
 		// single object

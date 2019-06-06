@@ -12,7 +12,7 @@
 const { InDB } = window['indb']
 const HelloWebWorker = window['hello-webworker']
 const DB_NAME = 'InDB_TEST'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const idb = new InDB({
     name: DB_NAME,
     version: DB_VERSION,
@@ -46,6 +46,10 @@ const idb = new InDB({
         {
             name: 'cleartest',
         },
+        {
+            name: 'txtest',
+            keyPath: 'id',
+        },
     ],
 })
 
@@ -53,6 +57,7 @@ const departstore = idb.use('departs')
 const studentstore = idb.use('students')
 const kvstore = idb.use('keyvalue')
 const teststore = idb.use('cleartest')
+const txstore = idb.use('txtest')
 
 const expect = chai.expect
 mocha.setup('bdd')
@@ -108,24 +113,6 @@ it('put multiple', async () => {
     ])
     const count = await studentstore.count()
     expect(count).to.equal(7)
-})
-
-it('update', async () => {
-    await studentstore.update({ id: '6', name: 'soda', age: 11 })
-    const item = await studentstore.get('6')
-    expect(item.name).to.equal('soda')
-    expect(item.age).to.equal(11)
-})
-
-it('update multiple', async () => {
-    await studentstore.update([
-        { id: '6', name: 'soda', age: 12 },
-        { id: '7', name: 'himen', age: 14 },
-    ])
-    const soda = await studentstore.get('6')
-    expect(soda.age).to.equal(12)
-    const himen = await studentstore.get('7')
-    expect(himen.age).to.equal(14)
 })
 
 it('delete', async () => {
@@ -268,6 +255,16 @@ it('Storage', async () => {
     await InDB.setItem('name', 'tomy')
     let name = await InDB.getItem('name')
     expect(name).to.equal('tomy')
+})
+
+it('transaction', async () => {
+    // create writable transaction twice on one store
+    await Promise.all([
+        txstore.put({ id: '1', name: 'tomi' }),
+        txstore.put({ id: '1', name: 'tomy' }),
+    ])
+    const item = await txstore.get('1')
+    expect(item.name).to.equal('tomy')
 })
 
 it('in webworker', async () => {
