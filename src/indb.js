@@ -187,20 +187,6 @@ export class InDBStore {
 		const name = this.name
 		return this.transaction(writable).then(tx => tx.objectStore(name))
 	}
-	request(create, writable = false) {
-		return new Promise((resolve, reject) => {
-			this.objectStore(writable).then((objectStore) => {
-				const request = create(objectStore)
-				request.onsuccess = (e) => {
-					const result = e.target.result
-					resolve(result)
-				}
-				request.onerror = (e) => {
-					reject(modifyError(e))
-				}
-			})
-		})
-	}
 	cursor(options) {
 		const { index, range, direction, onTouch, onDone, onError, writable = false } = options
 		return this.objectStore(writable).then((objectStore) => {
@@ -218,6 +204,21 @@ export class InDBStore {
 			request.onerror = (e) => {
 				onError(modifyError(e))
 			}
+		})
+	}
+	request(fn, options = {}) {
+		const { writable = false } = options
+		return new Promise((resolve, reject) => {
+			this.objectStore(writable).then((objectStore) => {
+				const request = fn(objectStore)
+				request.onsuccess = (e) => {
+					const result = e.target.result
+					resolve(result)
+				}
+				request.onerror = (e) => {
+					reject(modifyError(e))
+				}
+			})
 		})
 	}
 	iterate(fn, options = {}) {
@@ -507,14 +508,15 @@ export class InDBStore {
 				return this.add(obj[0], key)
 			}
 
-			const fns = objs.map(obj => objectStore => objectStore.add(obj))
+			const fns = objs.map(obj => objectStore => objectStore.add(obj, key))
 			return this.batch(fns)
 		}
 
 		if (!obj) {
 			return Promise.resolve()
 		}
-		return this.request(objectStore => objectStore.add(obj, key), 'readwrite')
+
+		return this.request(objectStore => objectStore.add(obj, key), { writable: true })
 	}
 	put(obj, key) {
 		if (Array.isArray(obj)) {
@@ -523,14 +525,15 @@ export class InDBStore {
 				return this.put(objs[0], key)
 			}
 
-			const fns = objs.map(obj => objectStore => objectStore.put(obj))
+			const fns = objs.map(obj => objectStore => objectStore.put(obj, key))
 			return this.batch(fns)
 		}
 
 		if (!obj) {
 			return Promise.resolve()
 		}
-		return this.request(objectStore => objectStore.put(obj, key), 'readwrite')
+
+		return this.request(objectStore => objectStore.put(obj, key), { writable: true })
 	}
 	delete(key) {
 		if (Array.isArray(key)) {
@@ -544,9 +547,10 @@ export class InDBStore {
 		}
 
 		if (!key) {
-			return
+			return Promise.resolve()
 		}
-		return this.request(objectStore => objectStore.delete(key), 'readwrite')
+
+		return this.request(objectStore => objectStore.delete(key), { writable: true })
 	}
 	remove(obj) {
 		const keyPah = this.keyPath
@@ -576,6 +580,6 @@ export class InDBStore {
 		return this.delete(key)
 	}
 	clear() {
-		return this.request(objectStore => objectStore.clear(), 'readwrite')
+		return this.request(objectStore => objectStore.clear(), { writable: true })
 	}
 }

@@ -11,7 +11,7 @@ npm i indb
 ES:
 
 ```js
-import InDB from 'indb/src/indb.js'
+import InDB from '../node_modules/indb/src/indb.js'
 ```
 
 Webpack:
@@ -29,7 +29,7 @@ const { InDB } = require('indb')
 UMD:
 
 ```html
-<script src="dist/indb.js"></script>
+<script src="node_modules/indb/dist/indb.js"></script>
 <script>
 const { InDB } = window['indb']
 </script>
@@ -126,7 +126,7 @@ const idb = new InDB(options)
 
 ### connect()
 
-Get current database.
+Connect and get current database.
 
 ```js
 let db = await idb.connect()
@@ -140,15 +140,14 @@ Close current connect.
 await idb.close()
 ```
 
-After you close current connect, all data operation will throw error.
-
-Remember to close database connect if you do not use it any more.
+You do always not need to close connection.
+Only be used when different connection come up with conflicts.
 
 ### use(objectStoreName)
 
 _not async function_
 
-Return a new instance of InDBStore.
+Return an instance of InDBStore.
 
 ```js
 const store2 = idb.use('store2')
@@ -232,9 +231,9 @@ store.query('age', [10, 11], 'in') // [10, 11].includes(obj.age)
 
 Select objects with multiple conditions. Pass conditions as an array, each condition item contains:
 
-- keyPath: an object property keyPath
-- value: the value to be found
-- compare: `>` `>=` `<` `<=` `!=` `=` `%`
+- keyPath: an object property key path
+- value: the value to be found/compared
+- compare: `>` `>=` `<` `<=` `!=` `=` `%` `in`
 - optional: wether to make this condition to be an optional, default 'false' which means 'AND' in SQL.
 
 Examples:
@@ -302,8 +301,8 @@ Get all records count.
 
 Append an object into your database.
 Notice, obj's properties should contain keyPath.
-If obj's keyPath exists in the objectStore, an error will be thrown.
-So use `put` instead as possible.
+If obj's keyPath does not exist in the objectStore, an error will be thrown.
+Use `put` instead as possible.
 
 #### put
 
@@ -419,7 +418,7 @@ When you invoke `stop`, the promise resolve.
 Create a request.
 
 ```js
-await store.request(objectStore => objectStore.add(obj), true) // the second parameter is writable
+await store.request(objectStore => objectStore.add(obj), { writable: true }) // the second parameter is writable
 ```
 
 #### batch
