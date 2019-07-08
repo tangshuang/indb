@@ -232,10 +232,22 @@ export class InDBStore {
 		return this.batch(fns, { writable: false })
 	}
 	keys() {
-		return this.request(objectStore => objectStore.getAllKeys())
+		const keyPah = this.keyPath
+		const results = []
+		return this.each((obj) => {
+			const key = parse(obj, keyPah)
+			results.push(key)
+		}).then(() => {
+			return results
+		})
 	}
 	all() {
-		return this.request(objectStore => objectStore.getAll())
+		const results = []
+		return this.each((obj) => {
+			results.push(obj)
+		}).then(() => {
+			return results
+		})
 	}
 	count() {
 		return this.request(objectStore => objectStore.count())
