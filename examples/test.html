@@ -12,7 +12,7 @@
 const { InDB } = window['indb']
 const HelloWebWorker = window['hello-webworker']
 const DB_NAME = 'InDB_TEST'
-const DB_VERSION = 4
+const DB_VERSION = 5
 const idb = new InDB({
     name: DB_NAME,
     version: DB_VERSION,
@@ -40,8 +40,8 @@ const idb = new InDB({
             ],
         },
         {
-            name: 'keyvalue',
-            isKeyValue: true,
+            name: 'kv',
+            isKv: true,
         },
         {
             name: 'cleartest',
@@ -55,7 +55,7 @@ const idb = new InDB({
 
 const departstore = idb.use('departs')
 const studentstore = idb.use('students')
-const kvstore = idb.use('keyvalue')
+const kvstore = idb.use('kv')
 const teststore = idb.use('cleartest')
 const txstore = idb.use('txtest')
 
@@ -252,8 +252,9 @@ it('clear', async () => {
 })
 
 it('Storage', async () => {
-    await InDB.setItem('name', 'tomy')
-    let name = await InDB.getItem('name')
+    const store = new InDB()
+    await store.setItem('name', 'tomy')
+    const name = await store.getItem('name')
     expect(name).to.equal('tomy')
 })
 

@@ -3,13 +3,19 @@ import { parse, modifyError } from './utils'
 export class InDB {
 	constructor(options = {}) {
 		let { name, version = 1, stores } = options
+		const asStorage = !name
 
 		if (!name) {
-			throw new Error('[InDB]: you should pass `name` option.')
+			name = '__indb__'
 		}
 
 		if (!stores || !Array.isArray(stores) || !stores.length) {
-			throw new Error('[InDB]: you should pass `stores` option.')
+			stores = [
+				{
+					name: '__indb__',
+					isKv: true,
+				},
+			]
 		}
 
 		this.name = name
@@ -19,9 +25,9 @@ export class InDB {
 		// update database structure
 		const request = indexedDB.open(name, version)
 		request.onupgradeneeded = (e) => {
-			let db = e.target.result
-			let existStoreNames = Array.from(db.objectStoreNames)
-			let passStoreNames = []
+			const db = e.target.result
+			const existStoreNames = Array.from(db.objectStoreNames)
+			const passStoreNames = []
 
 			stores.forEach((item) => {
 				let objectStore = null
@@ -29,13 +35,13 @@ export class InDB {
 					objectStore = e.target.transaction.objectStore(item.name)
 				}
 				else {
-					let keyPath = item.isKeyValue ? 'key' : item.keyPath
-					let autoIncrement = item.isKeyValue ? false : item.autoIncrement
+					const keyPath = item.isKv ? 'key' : item.keyPath
+					const autoIncrement = item.isKv ? false : item.autoIncrement
 					objectStore = db.createObjectStore(item.name, { keyPath, autoIncrement })
 				}
 
 				// delete old indexes
-				let indexNames = objectStore.indexNames
+				const indexNames = objectStore.indexNames
 				if (indexNames && indexNames.length) {
 					Array.from(indexNames).forEach((item) => objectStore.deleteIndex(item))
 				}
@@ -61,6 +67,13 @@ export class InDB {
 		}
 
 		this.using = {}
+
+		// use as a storage like:
+		// const store = new InDB()
+		// store.setItem('key', 'value')
+		if (asStorage) {
+			return this.use(name)
+		}
 	}
 	connect() {
 		return new Promise((resolve, reject) => {
@@ -91,7 +104,7 @@ export class InDB {
 		})
 
 		// if it is a key-value store, append special methods
-		if (currentStore.isKeyValue) {
+		if (currentStore.isKv) {
 			store.key = i => store.keys().then(keys => keys && keys[i])
 			store.getItem = key => store.get(key).then(obj => obj && obj.value)
 			store.setItem = (key, value) => store.put({ key, value })
@@ -112,6 +125,24 @@ export class InDB {
 	}
 }
 
+InDB.deleteDatabase = function(name) {
+	return new Promise((resolve, reject) => {
+		const request = indexedDB.deleteDatabase(name)
+		request.onsuccess = () => {
+			resolve()
+		}
+		request.onerror = (e) => {
+			reject(e)
+		}
+	})
+}
+
+InDB.databases = function() {
+	return indexedDB.databases()
+}
+
+export default InDB
+
 export class InDBStore {
 	constructor(options = {}) {
 		const { store, db } = options
@@ -127,7 +158,7 @@ export class InDBStore {
 		this.store = store
 		this.db = db
 		this.name = store.name
-		this.keyPath = store.isKeyValue ? 'key' : store.keyPath
+		this.keyPath = store.isKv ? 'key' : store.keyPath
 	}
 
 	transaction(writable = false) {
@@ -269,7 +300,7 @@ export class InDBStore {
 	}
 	some(count = 10, offset = 0) {
 		return new Promise((resolve, reject) => {
-			let results = []
+			const results = []
 			let i = 0
 			let start = offset
 			let end = offset + count
@@ -341,9 +372,9 @@ export class InDBStore {
 				index: key,
 				range,
 				onTouch: (cursor, owner) => {
-					let targetObj = cursor.value
-					let keyPath = owner.keyPath
-					let targetValue = parse(targetObj, keyPath)
+					const targetObj = cursor.value
+					const keyPath = owner.keyPath
+					const targetValue = parse(targetObj, keyPath)
 
 					if (compare === '!=') {
 						if (targetValue !== value) {
@@ -380,15 +411,15 @@ export class InDBStore {
 		const indexes = currentStore.indexes || []
 		const indexesMapping = {}
 		indexes.forEach((item) => {
-			let { name, keyPath } = item
+			const { name, keyPath } = item
 			indexesMapping[name] = keyPath
 		})
 
 		const or_conditions = []
 		const and_conditions = []
 		for (let i = 0, len = conditions.length; i < len; i ++) {
-			let { key, value, compare, optional } = conditions[i]
-			let keyPath = indexesMapping[key] || key // if there is not such index, use original key as keyPath
+			const { key, value, compare, optional } = conditions[i]
+			const keyPath = indexesMapping[key] || key // if there is not such index, use original key as keyPath
 			if (optional) {
 				or_conditions.push({ keyPath, value, compare })
 			}
@@ -397,7 +428,7 @@ export class InDBStore {
 			}
 		}
 		const determine = function(obj) {
-			let compareAandB = function(a, b, compare) {
+			const compareAandB = function(a, b, compare) {
 				if (a === undefined) {
 					return false
 				}
@@ -421,15 +452,15 @@ export class InDBStore {
 				}
 			}
 			for (let i = 0, len = and_conditions.length; i < len; i ++) {
-				let { keyPath, value, compare } = and_conditions[i]
-				let current = parse(obj, keyPath)
+				const { keyPath, value, compare } = and_conditions[i]
+				const current = parse(obj, keyPath)
 				if (!compareAandB(current, value, compare)) {
 					return false
 				}
 			}
 			for (let i = 0, len = or_conditions.length; i < len; i ++) {
-				let { keyPath, value, compare } = or_conditions[i]
-				let current = parse(obj, keyPath)
+				const { keyPath, value, compare } = or_conditions[i]
+				const current = parse(obj, keyPath)
 				if (compareAandB(current, value, compare)) {
 					return true
 				}
@@ -449,19 +480,19 @@ export class InDBStore {
 
 	// =====================================
 
-	add(obj) {
+	add(obj, key) {
 		if (!Array.isArray(obj)) {
-			return this.request(objectStore => objectStore.add(obj), 'readwrite')
+			return this.request(objectStore => objectStore.add(obj, key), 'readwrite')
 		}
 
 		const objs = obj
 		const fns = objs.map(obj => objectStore => objectStore.add(obj))
 		return this.batch(fns)
 	}
-	put(obj) {
+	put(obj, key) {
 		// single object
 		if (!Array.isArray(obj)) {
-			return this.request(objectStore => objectStore.put(obj), 'readwrite')
+			return this.request(objectStore => objectStore.put(obj, key), 'readwrite')
 		}
 
 		// multiple objects
@@ -501,21 +532,3 @@ export class InDBStore {
 		return this.request(objectStore => objectStore.clear(), 'readwrite')
 	}
 }
-
-const idb = new InDB({
-	name: 'InDB',
-	stores: [
-		{
-			name: 'InDB',
-			isKeyValue: true,
-		},
-	],
-})
-const store = idb.use('InDB')
-
-InDB.setItem = store.setItem.bind(store)
-InDB.getItem = store.getItem.bind(store)
-InDB.removeItem = store.removeItem.bind(store)
-InDB.key = store.key.bind(store)
-
-export default InDB

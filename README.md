@@ -48,7 +48,7 @@ const idb = new InDB({
     },
     {
       name: 'store2',
-      isKeyValue: true,
+      isKv: true,
     },
   ],
 })
@@ -79,11 +79,12 @@ const idb = new InDB(options)
 - stores: array, to define objectStores
   - name: string, store name
   - keyPath: string, store primary keyPath
+  - autoIncrement
   - indexes: array, to define store index
     - name: string, index name
     - keyPath: string, index keyPath
     - unique: boolean, whether the keyPath value should be unique
-  - isKeyValue: boolean, whether to make it a key-value store, if set true, other options will be ignored
+  - isKv: boolean, whether to make it a key-value store, if set true, other options will be ignored
 
 Example:
 
@@ -109,7 +110,7 @@ const store1 = {
 // an example of key-value store config
 const store2 = {
   name: 'store2',
-  isKeyValue: true, // make this store to be key-value store, which can use get(key) to return value directly.
+  isKv: true, // make this store to be key-value store, which can use get(key) to return value directly.
 }
 // an example of options
 const options = {
@@ -151,6 +152,22 @@ Return a new instance of InDBStore.
 
 ```js
 const store2 = idb.use('store2')
+```
+
+### static deleteDatabase(dbname)
+
+This is a static method of InDB, which is to delete a database from indexedDB.
+
+```js
+InDB.deleteDatabase('mydb').then(...)
+```
+
+### static databases()
+
+It's a static method to get databases list in a promise.
+
+```js
+InDB.databases().then(dbs => ...)
 ```
 
 ## InDBStore
@@ -430,7 +447,7 @@ const idb = new InDB({
   stores: [
     {
       name: 'kv_store',
-      isKeyValue: true,
+      isKv: true, // notice here
     },
   ],
 })
@@ -446,9 +463,10 @@ Notice, normal stores do not have these apis.
 Use like a pure key-value Storage such as localStorage:
 
 ```js
-await InDB.setItem('name', 'tomy')
-let name = await InDB.getItem('name')
-await InDB.removeItem('name')
+const store = new InDB() // do not pass any arguments
+await store.setItem('name', 'tomy')
+const name = await store.getItem('name')
+await store.removeItem('name')
 ```
 
 ## test
