@@ -66,6 +66,10 @@ export class InDB {
 			}
 		}
 
+		request.onblocked = (e) => {
+			console.error('The indexedDB is being blocked when you want to connect a database.')
+		}
+
 		this.using = {}
 
 		// use as a storage like:
@@ -481,35 +485,145 @@ export class InDBStore {
 	// =====================================
 
 	add(obj, key) {
-		if (!Array.isArray(obj)) {
-			return this.request(objectStore => objectStore.add(obj, key), 'readwrite')
+		this._addQueue = this._addQueue  || []
+		this._addQueue.push({
+			obj,
+			key,
+		})
+
+		if (this._addTask) {
+			return this._addTask
 		}
 
-		const objs = obj
-		const fns = objs.map(obj => objectStore => objectStore.add(obj))
-		return this.batch(fns)
+		this._addTask = new Promise((resolve, reject) => {
+			setTimeout(() => {
+				const queue = this._addQueue
+				const tasks = {}
+
+				// empty current queue
+				this._addTask = null
+				this._addQueue = []
+
+				queue.forEach(({ obj, key }) => {
+					const prop = key ? key : '$'
+					const items = tasks[prop] = tasks[prop] || []
+					if (Array.isArray(obj)) {
+						if (obj.length) {
+							items.push(...obj)
+						}
+					}
+					else {
+						items.push(obj)
+					}
+				})
+
+				const fns = []
+				const keys = Object.keys(tasks)
+				keys.forEach((key) => {
+					const objs = tasks[key]
+					key = key === '$' ? undefined : key
+					objs.forEach((obj) => fns.push(objectStore => objectStore.add(obj, key)))
+				})
+
+				if (fns.length > 1) {
+					this.batch(fns).then(resolve).catch(reject)
+				}
+				else {
+					this.request(fns[0], 'readwrite').then(resolve).catch(reject)
+				}
+			}, 50)
+		})
+		return this._addTask
 	}
 	put(obj, key) {
-		// single object
-		if (!Array.isArray(obj)) {
-			return this.request(objectStore => objectStore.put(obj, key), 'readwrite')
+		this._putQueue = this._putQueue  || []
+		this._putQueue.push({
+			obj,
+			key,
+		})
+
+		if (this._putTask) {
+			return this._putTask
 		}
 
-		// multiple objects
-		const objs = obj
-		const fns = objs.map(obj => objectStore => objectStore.put(obj))
-		return this.batch(fns)
+		this._putTask = new Promise((resolve, reject) => {
+			setTimeout(() => {
+				const queue = this._putQueue
+				const tasks = {}
+
+				// empty current queue
+				this._putTask = null
+				this._putQueue = []
+
+				queue.forEach(({ obj, key }) => {
+					const prop = key ? key : '$'
+					const items = tasks[prop] = tasks[prop] || []
+					if (Array.isArray(obj)) {
+						if (obj.length) {
+							items.push(...obj)
+						}
+					}
+					else {
+						items.push(obj)
+					}
+				})
+
+				const fns = []
+				const keys = Object.keys(tasks)
+				keys.forEach((key) => {
+					const objs = tasks[key]
+					key = key === '$' ? undefined : key
+					objs.forEach((obj) => fns.push(objectStore => objectStore.put(obj, key)))
+				})
+
+				if (fns.length > 1) {
+					this.batch(fns).then(resolve).catch(reject)
+				}
+				else {
+					this.request(fns[0], 'readwrite').then(resolve).catch(reject)
+				}
+			}, 50)
+		})
+		return this._putTask
 	}
 	delete(key) {
-		// single key
-		if (!Array.isArray(key)) {
-			return this.request(objectStore => objectStore.delete(key), 'readwrite')
+		this._deleteQueue = this._deleteQueue  || []
+		this._deleteQueue.push({
+			key,
+		})
+
+		if (this._deleteTask) {
+			return this._deleteTask
 		}
 
-		// multiple keys
-		const keys = key
-		const fns = keys.map(key => objectStore => objectStore.delete(key))
-		return this.batch(fns)
+		this._deleteTask = new Promise((resolve, reject) => {
+			setTimeout(() => {
+				const queue = this._deleteQueue
+				const tasks = {}
+
+				// empty current queue
+				this._deleteTask = null
+				this._deleteQueue = []
+
+				queue.forEach(({ key }) => {
+					tasks[key] = true
+				})
+
+				const fns = []
+				const keys = Object.keys(tasks)
+				keys.forEach((key) => {
+					fns.push(objectStore => objectStore.delete(key))
+				})
+
+				if (fns.length > 1) {
+					this.batch(fns).then(resolve).catch(reject)
+				}
+				else {
+					this.request(fns[0], 'readwrite').then(resolve).catch(reject)
+				}
+			}, 50)
+		})
+		return this._deleteTask
 	}
 	remove(obj) {
 		const keyPah = this.keyPath
@@ -522,11 +636,8 @@ export class InDBStore {
 
 		// multiple objects
 		const objs = obj
-		const fns = objs.map(obj => {
-			const key = parse(obj, keyPah)
-			return objectStore => objectStore.delete(key)
-		})
-		return this.batch(fns)
+		const keys = objs.map(obj => parse(obj, keyPah))
+		return this.delete(keys)
 	}
 	clear() {
 		return this.request(objectStore => objectStore.clear(), 'readwrite')
