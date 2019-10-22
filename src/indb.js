@@ -65,6 +65,9 @@ export class InDB {
 				})
 			}
 		}
+		request.onblocked = (e) => {
+			console.error(modifyError(new Error('indexedDB ' + name + ' is blocked')))
+		}
 
 		this.using = {}
 
@@ -164,7 +167,19 @@ export class InDBStore {
 	transaction(writable = false) {
 		const name = this.name
 		const mode = writable ? 'readwrite' : 'readonly'
-		return this.db.connect().then(db => db.transaction(name, mode))
+		const connection = this.db.connection
+		const deferer = connection ? Promise.resolve(connection) : this.db.connect()
+		return deferer.then((db) => {
+			this.db.connection = db
+			const tx = db.transaction(name, mode)
+			const disconnect = () => {
+				this.db.connection = null
+			}
+			tx.oncomplete = disconnect
+			tx.onabort = disconnect
+			tx.onerror = disconnect
+			return tx
+		})
 	}
 	objectStore(writable = false) {
 		const name = this.name
