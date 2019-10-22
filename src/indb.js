@@ -167,6 +167,8 @@ export class InDBStore {
 	transaction(writable = false) {
 		const name = this.name
 		const mode = writable ? 'readwrite' : 'readonly'
+
+		// share the same connection
 		const connection = this.db.connection
 		const deferer = connection ? Promise.resolve(connection) : this.db.connect()
 		return deferer.then((db) => {
@@ -246,9 +248,9 @@ export class InDBStore {
 		return this.transaction(writable).then((tx) => {
 			const name = this.name
 			const promises = []
+			const objectStore = tx.objectStore(name)
 			fns.forEach((fn) => {
 				const deferer = new Promise((resolve, reject) => {
-					const objectStore = tx.objectStore(name)
 					const request = fn(objectStore)
 					request.onsuccess = (e) => {
 						const result = e.target.result
@@ -496,52 +498,79 @@ export class InDBStore {
 	// =====================================
 
 	add(obj, key) {
-		if (!Array.isArray(obj)) {
-			return this.request(objectStore => objectStore.add(obj, key), 'readwrite')
+		if (Array.isArray(obj)) {
+			const objs = obj
+			if (objs.length < 2) {
+				return this.add(obj[0], key)
+			}
+
+			const fns = objs.map(obj => objectStore => objectStore.add(obj))
+			return this.batch(fns)
 		}
 
-		const objs = obj
-		const fns = objs.map(obj => objectStore => objectStore.add(obj))
-		return this.batch(fns)
+		if (!obj) {
+			return Promise.resolve()
+		}
+		return this.request(objectStore => objectStore.add(obj, key), 'readwrite')
 	}
 	put(obj, key) {
-		// single object
-		if (!Array.isArray(obj)) {
-			return this.request(objectStore => objectStore.put(obj, key), 'readwrite')
+		if (Array.isArray(obj)) {
+			const objs = obj
+			if (objs.length < 2) {
+				return this.put(objs[0], key)
+			}
+
+			const fns = objs.map(obj => objectStore => objectStore.put(obj))
+			return this.batch(fns)
 		}
 
-		// multiple objects
-		const objs = obj
-		const fns = objs.map(obj => objectStore => objectStore.put(obj))
-		return this.batch(fns)
+		if (!obj) {
+			return Promise.resolve()
+		}
+		return this.request(objectStore => objectStore.put(obj, key), 'readwrite')
 	}
 	delete(key) {
-		// single key
-		if (!Array.isArray(key)) {
-			return this.request(objectStore => objectStore.delete(key), 'readwrite')
+		if (Array.isArray(key)) {
+			const keys = key
+			if (keys.length < 2) {
+				return this.delete(keys[0])
+			}
+
+			const fns = keys.map(key => objectStore => objectStore.delete(key))
+			return this.batch(fns)
 		}
 
-		// multiple keys
-		const keys = key
-		const fns = keys.map(key => objectStore => objectStore.delete(key))
-		return this.batch(fns)
+		if (!key) {
+			return
+		}
+		return this.request(objectStore => objectStore.delete(key), 'readwrite')
 	}
 	remove(obj) {
 		const keyPah = this.keyPath
 
-		// single obj
-		if (!Array.isArray(obj)) {
-			const key = parse(obj, keyPah)
-			return this.delete(key)
+		if (Array.isArray(obj)) {
+			const objs = obj
+			if (objs.length < 2) {
+				return this.remove(objs[0])
+			}
+
+			const fns = objs.map(obj => {
+				const key = parse(obj, keyPah)
+				return objectStore => objectStore.delete(key)
+			})
+			return this.batch(fns)
 		}
 
-		// multiple objects
-		const objs = obj
-		const fns = objs.map(obj => {
-			const key = parse(obj, keyPah)
-			return objectStore => objectStore.delete(key)
-		})
-		return this.batch(fns)
+		if (!obj) {
+			return Promise.resolve()
+		}
+
+		const key = parse(obj, keyPah)
+		if (!key) {
+			return Promise.resolve()
+		}
+
+		return this.delete(key)
 	}
 	clear() {
 		return this.request(objectStore => objectStore.clear(), 'readwrite')
