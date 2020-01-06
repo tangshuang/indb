@@ -221,15 +221,18 @@ export class InDBStore {
 		})
 	}
 	iterate(fn, options = {}) {
-		const { writable = false, direction = 'next' } = options
+		const { index, range, writable = false, direction = 'next' } = options
 		return new Promise((resolve, reject) => {
 			this.cursor({
+				index,
+				range,
 				writable,
 				direction,
 				onTouch: (cursor, owner) => {
 					const next = () => cursor.continue()
 					const stop = () => {
-						owner.transaction.abort()
+						// should commit when writable is true
+						owner.transaction.commit()
 						resolve()
 					}
 					fn(cursor, next, stop)
