@@ -3,6 +3,17 @@ export function makeKeyChain(path) {
   return chain
 }
 export function parse(obj, path) {
+  if (Array.isArray(path)) {
+    for (let i = 0, len = path.length; i < len; i ++) {
+      const item = path[i]
+      const res = parse(obj, item)
+      if (res !== undefined) {
+        return res
+      }
+    }
+    return
+  }
+
   let chain = makeKeyChain(path)
 
   if (!chain.length) {
@@ -13,7 +24,7 @@ export function parse(obj, path) {
   for (let i = 0, len = chain.length; i < len; i ++) {
     let key = chain[i]
     if (target[key] === undefined) {
-      return undefined
+      return
     }
     target = target[key]
   }
