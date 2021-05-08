@@ -1,4 +1,4 @@
-import { parse, modifyError } from './utils'
+import { parse, modifyError } from './utils.js'
 
 export class InDB {
 	constructor(options = {}) {
@@ -448,6 +448,7 @@ export class InDBStore {
 				and_conditions.push({ keyPath, value, compare })
 			}
 		}
+
 		const determine = function(obj) {
 			const compareAandB = function(a, b, compare) {
 				if (a === undefined) {
@@ -472,6 +473,11 @@ export class InDBStore {
 						return a === b
 				}
 			}
+
+			if (!and_conditions.length && !or_conditions.length) {
+				return false
+			}
+
 			for (let i = 0, len = and_conditions.length; i < len; i ++) {
 				const { keyPath, value, compare } = and_conditions[i]
 				const current = parse(obj, keyPath)
@@ -479,6 +485,11 @@ export class InDBStore {
 					return false
 				}
 			}
+
+			if (!or_conditions.length) {
+				return true
+			}
+
 			for (let i = 0, len = or_conditions.length; i < len; i ++) {
 				const { keyPath, value, compare } = or_conditions[i]
 				const current = parse(obj, keyPath)
@@ -486,6 +497,7 @@ export class InDBStore {
 					return true
 				}
 			}
+
 			return false
 		}
 

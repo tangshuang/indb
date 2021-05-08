@@ -221,6 +221,13 @@ it('select', async () => {
         { key: 'age', value: 10, compare: '=', optional: true },
     ])
     expect(objs.length).to.equal(3)
+
+    let stds = await studentstore.select([
+        { key: 'name', value: 'tomy', compare: '=' },
+        { key: 'age', value: 10, compare: '=' },
+    ])
+    expect(stds.length).to.equal(1)
+    expect(stds[0].name).to.equal('tomy')
 })
 
 it('use', async () => {
