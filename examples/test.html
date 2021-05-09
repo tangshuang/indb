@@ -216,18 +216,34 @@ it('query !=', async () => {
 })
 
 it('select', async () => {
+    // 1 and 2
+    let stds = await studentstore.select([
+        { key: 'age', value: 10, compare: '<=' },
+        { key: 'name', value: 'tomy', compare: '=' },
+    ])
+    expect(stds.length).to.equal(1)
+    expect(stds[0].name).to.equal('tomy')
+
+    // 1 or 2
     let objs = await studentstore.select([
         { key: 'age', value: 22, compare: '>', optional: true },
         { key: 'age', value: 10, compare: '=', optional: true },
     ])
     expect(objs.length).to.equal(3)
 
-    let stds = await studentstore.select([
-        { key: 'name', value: 'tomy', compare: '=' },
-        { key: 'age', value: 10, compare: '=' },
-    ])
-    expect(stds.length).to.equal(1)
-    expect(stds[0].name).to.equal('tomy')
+    // (1 and 2) or (3)
+    let persons = await studentstore.select(
+        [
+            { key: 'age', value: 10, compare: '<=' },
+            { key: 'name', value: 'tomy', compare: '=' },
+        ],
+        [
+            { key: 'age', value: 11, compare: '>' },
+        ]
+    )
+    expect(persons.length).to.equal(2)
+    expect(persons[0].name).to.equal('tomy')
+    expect(persons[1].name).to.equal('othe')
 })
 
 it('use', async () => {

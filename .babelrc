@@ -3,6 +3,7 @@
     ["@babel/preset-env", { "modules": false }]
   ],
   "plugins": [
-    "syntax-trailing-function-commas"
+    "syntax-trailing-function-commas",
+    "@babel/plugin-transform-spread"
   ]
 }

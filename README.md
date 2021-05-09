@@ -251,15 +251,30 @@ store.select([
   { keyPath: 'amount', value: 6, compare: '<', optional: true },
 ])
 
-// to find objects which amount>10 AND (color='red' OR color='blue')
+// to find objects which (amount>10) AND (color='red' OR color='blue')
 store.select([
   { keyPath: 'amount', value: 10, compare: '>' },
   { keyPath: 'color', value: 'red', optional: true },
   { keyPath: 'color', value: 'blue', optional: true },
 ])
+
+// pass several parameters to query objects in one of groups
+// group1 OR group2 : ((age<=10) AND (name='tomy' OR name='lucy')) OR (age>11)
+store.select(
+  // group1: (age<=10) AND (name='tomy' OR name='lucy')
+  [
+    { key: 'age', value: 10, compare: '<=' },
+    { key: 'name', value: 'tomy', compare: '=', optional: true },
+    { key: 'name', value: 'lucy', compare: '=', optional: true },
+  ],
+  // group2: age>11
+  [
+    { key: 'age', value: 11, compare: '>' },
+  ]
+)
 ```
 
-NOTICE: the final logic is `A AND B AND C AND (D OR E OR F)`.
+NOTICE: the final logic of one group is always `(1 AND 2 AND 3) AND (4 OR 5 OR 6)` no matter where the `optional` ones lays.
 NOTICE: `select` do NOT use index to query data, it will traserve all data in database.
 
 #### all

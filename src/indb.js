@@ -427,7 +427,7 @@ export class InDBStore {
 			})
 		})
 	}
-	select(conditions) {
+	select(...rules) {
 		const currentStore = this.store
 		const indexes = currentStore.indexes || []
 		const indexesMapping = {}
@@ -436,44 +436,31 @@ export class InDBStore {
 			indexesMapping[name] = keyPath
 		})
 
-		const or_conditions = []
-		const and_conditions = []
-		for (let i = 0, len = conditions.length; i < len; i ++) {
-			const { key, value, compare, optional } = conditions[i]
-			const keyPath = indexesMapping[key] || key // if there is not such index, use original key as keyPath
-			if (optional) {
-				or_conditions.push({ keyPath, value, compare })
+		const compareAandB = function(a, b, compare) {
+			if (a === undefined) {
+				return false
 			}
-			else {
-				and_conditions.push({ keyPath, value, compare })
+			switch (compare) {
+				case '>':
+					return a > b
+				case '>=':
+					return a >= b
+				case '<':
+					return a < b
+				case '<=':
+					return a <= b
+				case '!=':
+					return a !== b
+				case '%':
+					return typeof a === 'string' && a.indexOf(b) > -1
+				case 'in':
+					return Array.isArray(b) && b.indexOf(a) > -1
+				default:
+					return a === b
 			}
 		}
 
-		const determine = function(obj) {
-			const compareAandB = function(a, b, compare) {
-				if (a === undefined) {
-					return false
-				}
-				switch (compare) {
-					case '>':
-						return a > b
-					case '>=':
-						return a >= b
-					case '<':
-						return a < b
-					case '<=':
-						return a <= b
-					case '!=':
-						return a !== b
-					case '%':
-						return typeof a === 'string' && a.indexOf(b) > -1
-					case 'in':
-						return Array.isArray(b) && b.indexOf(a) > -1
-					default:
-						return a === b
-				}
-			}
-
+		const determine = function(obj, and_conditions, or_conditions) {
 			if (!and_conditions.length && !or_conditions.length) {
 				return false
 			}
@@ -501,9 +488,37 @@ export class InDBStore {
 			return false
 		}
 
+		const groups = []
+		rules.forEach((conditions) => {
+			const or_conditions = []
+			const and_conditions = []
+			for (let i = 0, len = conditions.length; i < len; i ++) {
+				const { key, value, compare, optional } = conditions[i]
+				const keyPath = indexesMapping[key] || key // if there is not such index, use original key as keyPath
+				if (optional) {
+					or_conditions.push({ keyPath, value, compare })
+				}
+				else {
+					and_conditions.push({ keyPath, value, compare })
+				}
+			}
+			groups.push([and_conditions, or_conditions])
+		})
+
+		const isOk = (obj) => {
+			for (let i = 0, len = groups.length; i < len; i ++) {
+				const [and_conditions, or_conditions] = groups[i]
+				const res = determine(obj, and_conditions, or_conditions)
+				if (res) {
+					return true
+				}
+			}
+			return false
+		}
+
 		const results = []
 		return this.each((obj) => {
-			if (determine(obj)) {
+			if (isOk(obj)) {
 				results.push(obj)
 			}
 		}).then(() => {
