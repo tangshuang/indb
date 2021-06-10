@@ -162,6 +162,8 @@ export class InDBStore {
 		this.db = db
 		this.name = store.name
 		this.keyPath = store.isKv ? 'key' : store.keyPath
+
+		this.$transactions = []
 	}
 
 	transaction(writable = false) {
@@ -174,8 +176,10 @@ export class InDBStore {
 		return deferer.then((db) => {
 			this.db.connection = db
 			const tx = db.transaction(name, mode)
+			this.$transactions.push(tx)
 			const disconnect = () => {
 				this.db.connection = null
+				this.$transactions.forEach((item, i) => item === tx && this.$transactions.splice(i, 1))
 			}
 			tx.oncomplete = disconnect
 			tx.onabort = disconnect
