@@ -163,29 +163,35 @@ export class InDBStore {
 		this.name = store.name
 		this.keyPath = store.isKv ? 'key' : store.keyPath
 
-		this.$transactions = []
+		this._queue = []
 	}
 
 	transaction(writable = false) {
-		const name = this.name
-		const mode = writable ? 'readwrite' : 'readonly'
+		const create = () => {
+			const name = this.name
+			const mode = writable ? 'readwrite' : 'readonly'
 
-		// share the same connection
-		const connection = this.db.connection
-		const deferer = connection ? Promise.resolve(connection) : this.db.connect()
-		return deferer.then((db) => {
-			this.db.connection = db
-			const tx = db.transaction(name, mode)
-			this.$transactions.push(tx)
-			const disconnect = () => {
-				this.db.connection = null
-				this.$transactions.forEach((item, i) => item === tx && this.$transactions.splice(i, 1))
-			}
-			tx.oncomplete = disconnect
-			tx.onabort = disconnect
-			tx.onerror = disconnect
-			return tx
-		})
+			// share the same connection
+			const connection = this.db.connection
+			const deferer = connection ? Promise.resolve(connection) : this.db.connect()
+			return deferer.then((db) => {
+				this.db.connection = db
+				const tx = db.transaction(name, mode)
+				const disconnect = () => {
+					this.db.connection = null
+					this._queue.shift()
+				}
+				tx.oncomplete = disconnect
+				tx.onabort = disconnect
+				tx.onerror = disconnect
+				return tx
+			})
+		}
+
+		const latest = this._queue[this._queue.length - 1]
+		const deferer = latest ? latest.then(() => create()) : create()
+		this._queue.push(deferer)
+		return deferer
 	}
 	objectStore(writable = false) {
 		const name = this.name

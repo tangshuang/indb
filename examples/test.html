@@ -333,6 +333,27 @@ it('in webworker', async () => {
     let res = await worker.invoke()
     expect(res.name).to.equal('othe')
 })
+
+it('large data put', async () => {
+    await studentstore.clear()
+    const items = []
+    for (let i = 0; i < 1000; i ++) {
+        const random = Math.random() + ''
+        items.push({
+            id: random,
+            name: 'name_' + random,
+            age: 'age_' + random,
+        })
+    }
+    await studentstore.put(items)
+
+    const count = await studentstore.count()
+    expect(count).to.equal(1000)
+
+    const some = await studentstore.some(200)
+    expect(some.length).to.equal(200)
+})
+
 // ----------------------------------------------------
 
 mocha.run()
