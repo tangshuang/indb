@@ -263,13 +263,13 @@ store.select([
 store.select(
   // group1: (age<=10) AND (name='tomy' OR name='lucy')
   [
-    { key: 'age', value: 10, compare: '<=' },
-    { key: 'name', value: 'tomy', compare: '=', optional: true },
-    { key: 'name', value: 'lucy', compare: '=', optional: true },
+    { keyPath: 'age', value: 10, compare: '<=' },
+    { keyPath: 'name', value: 'tomy', compare: '=', optional: true },
+    { keyPath: 'name', value: 'lucy', compare: '=', optional: true },
   ],
   // group2: age>11
   [
-    { key: 'age', value: 11, compare: '>' },
+    { keyPath: 'age', value: 11, compare: '>' },
   ]
 )
 ```
