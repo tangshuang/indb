@@ -231,7 +231,7 @@ store.query('age', [10, 11], 'in') // [10, 11].includes(obj.age)
 
 Select objects with multiple conditions. Pass conditions as an array, each condition item contains:
 
-- keyPath: an object property key path
+- key: an index name or an object property key path, if key matches an index name, it will use this index's keyPath to find value, if key does not match any index name, it will be treated as a keyPath
 - value: the value to be found/compared
 - compare: `>` `>=` `<` `<=` `!=` `=` `%` `in`
 - optional: wether to make this condition to be an optional, default 'false' which means 'AND' in SQL.
@@ -241,21 +241,21 @@ Examples:
 ```js
 // to find objects which amount>10 AND color='red'
 store.select([
-  { keyPath: 'amount', value: 10, compare: '>' },
-  { keyPath: 'color', value: 'red' },
+  { key: 'amount', value: 10, compare: '>' },
+  { key: 'color', value: 'red' },
 ])
 
 // to find objects which amount>10 OR amount<6
 store.select([
-  { keyPath: 'amount', value: 10, compare: '>', optional: true },
-  { keyPath: 'amount', value: 6, compare: '<', optional: true },
+  { key: 'amount', value: 10, compare: '>', optional: true },
+  { key: 'amount', value: 6, compare: '<', optional: true },
 ])
 
 // to find objects which (amount>10) AND (color='red' OR color='blue')
 store.select([
-  { keyPath: 'amount', value: 10, compare: '>' },
-  { keyPath: 'color', value: 'red', optional: true },
-  { keyPath: 'color', value: 'blue', optional: true },
+  { key: 'amount', value: 10, compare: '>' },
+  { key: 'color', value: 'red', optional: true },
+  { key: 'color', value: 'blue', optional: true },
 ])
 
 // pass several parameters to query objects in one of groups
@@ -263,13 +263,13 @@ store.select([
 store.select(
   // group1: (age<=10) AND (name='tomy' OR name='lucy')
   [
-    { keyPath: 'age', value: 10, compare: '<=' },
-    { keyPath: 'name', value: 'tomy', compare: '=', optional: true },
-    { keyPath: 'name', value: 'lucy', compare: '=', optional: true },
+    { key: 'age', value: 10, compare: '<=' },
+    { key: 'name', value: 'tomy', compare: '=', optional: true },
+    { key: 'name', value: 'lucy', compare: '=', optional: true },
   ],
   // group2: age>11
   [
-    { keyPath: 'age', value: 11, compare: '>' },
+    { key: 'age', value: 11, compare: '>' },
   ]
 )
 ```
