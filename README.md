@@ -11,7 +11,7 @@ npm i indb
 ES:
 
 ```js
-import InDB from '../node_modules/indb/src/indb.js'
+import InDB from '../node_modules/indb/es/index.js'
 ```
 
 Webpack:
@@ -44,7 +44,7 @@ const idb = new InDB({
   stores: [
     {
       name: 'store1',
-      keyPath: 'id',
+      primaryKeyPath: 'id',
     },
     {
       name: 'store2',
@@ -78,7 +78,7 @@ const idb = new InDB(options)
 - version: positive int, the version of this indexedDB instance.
 - stores: array, to define objectStores
   - name: string, store name
-  - keyPath: string, store primary keyPath
+  - primaryKeyPath: string, store primary keyPath
   - autoIncrement
   - indexes: array, to define store index
     - name: string, index name
@@ -100,7 +100,7 @@ const index3 = ...
 // an example of store config which has indexes
 const store1 = {
   name: 'store1', // required, objectStore name
-  keyPath: 'id', // required, objectStore keyPath
+  primaryKeyPath: 'id', // required, objectStore keyPath
   indexes: [ // optional
     index1,
     index2,

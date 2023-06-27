@@ -1,10 +1,10 @@
 module.exports = {
 	mode: 'none',
-	entry: __dirname + '/src/indb.js',
+	entry: __dirname + '/es/index.js',
 	output: {
 		path: __dirname + '/dist',
-		filename: 'indb.js',
-		library: 'indb',
+		filename: 'index.js',
+		library: 'index',
 		libraryTarget: 'umd',
 		globalObject: `typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : this`,
 	},
@@ -17,7 +17,7 @@ module.exports = {
 		],
 	},
 	optimization: {
-		minimize: false,
+		minimize: true,
 		usedExports: true,
 		sideEffects: true,
 	},

@@ -1,6 +1,19 @@
-import { parse, modifyError } from './utils.js'
-
 export class InDB {
+	/**
+	 * InDB
+	 * @param {object} [options]
+	 * @param {string} [options.name] database name
+	 * @param {number} [version] database version
+	 * @param {object[]} [stores]
+	 * @param {string} [stores[].primaryKeyPath] store primary keyPath
+	 * @param {boolean} [stores[].autoIncrement] is store primary keyPath autoIncrement, if true, primary key will be number
+	 * @param {boolean} [stores[].isKv] is store set to be Key-Value mode, if true, the store will have Storage methods, and `primaryKeyPath` `autoIncrement` not working
+	 * @param {object[]} [stores[].indexes]
+	 * @param {string} [stores[].indexes[].name] index name
+	 * @param {string} [stores[].indexes[].keyPath] index keyPath
+	 * @param {boolean} [stores[].indexes[].unique] should index value be unique
+	 * @returns
+	 */
 	constructor(options = {}) {
 		let { name, version = 1, stores } = options
 		const asStorage = !name
@@ -35,7 +48,7 @@ export class InDB {
 					objectStore = e.target.transaction.objectStore(item.name)
 				}
 				else {
-					const keyPath = item.isKv ? 'key' : item.keyPath
+					const keyPath = item.isKv ? 'key' : item.primaryKeyPath
 					const autoIncrement = item.isKv ? false : item.autoIncrement
 					objectStore = db.createObjectStore(item.name, { keyPath, autoIncrement })
 				}
@@ -57,6 +70,7 @@ export class InDB {
 			})
 
 			// delete objectStores which is not in config information
+			// notice, developers should backup data firstly
 			if (existStoreNames) {
 				existStoreNames.forEach((item) => {
 					if (passStoreNames.indexOf(item) === -1) {
@@ -69,7 +83,7 @@ export class InDB {
 			console.error(modifyError(new Error('indexedDB ' + name + ' is blocked')))
 		}
 
-		this.using = {}
+		this.cache = {}
 
 		// use as a storage like:
 		// const store = new InDB()
@@ -78,6 +92,7 @@ export class InDB {
 			return this.use(name)
 		}
 	}
+
 	connect() {
 		return new Promise((resolve, reject) => {
 			const request = indexedDB.open(this.name, this.version)
@@ -89,6 +104,7 @@ export class InDB {
 			}
 		})
 	}
+
 	use(name) {
 		const currentStore = this.stores.find(item => item.name === name)
 
@@ -97,8 +113,8 @@ export class InDB {
 		}
 
 		// use connected store
-		if (this.using[name]) {
-			return this.using[name]
+		if (this.cache[name]) {
+			return this.cache[name]
 		}
 
 		const store = new InDBStore({
@@ -108,45 +124,56 @@ export class InDB {
 
 		// if it is a key-value store, append special methods
 		if (currentStore.isKv) {
-			store.key = i => store.keys().then(keys => keys && keys[i])
-			store.getItem = key => store.get(key).then(obj => obj && obj.value)
-			store.setItem = (key, value) => store.put({ key, value })
-			store.removeItem = key => store.delete(key)
+			Object.defineProperties(store, {
+				key: {
+					value: i => store.keys().then(keys => keys && keys[i]),
+				},
+				getItem: {
+					value: key => store.get(key).then(obj => obj && obj.value),
+				},
+				setItem: {
+					value: (key, value) => store.put({ key, value }),
+				},
+				removeItem: {
+					value: key => store.delete(key),
+				},
+			})
 		}
 
-		this.using[name] = store
+		this.cache[name] = store
 
 		return store
 	}
+
 	close() {
-		this.using = null
+		this.cache = null
 		this.stores = null
 
 		return this.connect().then((db) => {
 			db.close()
 		})
 	}
-}
 
-InDB.deleteDatabase = function(name) {
-	return new Promise((resolve, reject) => {
-		const request = indexedDB.deleteDatabase(name)
-		request.onsuccess = () => {
-			resolve()
-		}
-		request.onerror = (e) => {
-			reject(e)
-		}
-	})
-}
+	static deleteDatabase(name) {
+		return new Promise((resolve, reject) => {
+			const request = indexedDB.deleteDatabase(name)
+			request.onsuccess = () => {
+				resolve()
+			}
+			request.onerror = (e) => {
+				reject(e)
+			}
+		})
+	}
 
-InDB.databases = function() {
-	return indexedDB.databases()
+	static databases() {
+		return indexedDB.databases()
+	}
 }
 
 export default InDB
 
-export class InDBStore {
+class InDBStore {
 	constructor(options = {}) {
 		const { store, db } = options
 
@@ -158,10 +185,11 @@ export class InDBStore {
 			throw new Error(`[InDBStore]: options.db should be an instanceof InDB.`)
 		}
 
-		this.store = store
 		this.db = db
+
+		this.store = store
 		this.name = store.name
-		this.keyPath = store.isKv ? 'key' : store.keyPath
+		this.primaryKeyPath = store.isKv ? 'key' : store.primaryKeyPath
 
 		this._queue = []
 	}
@@ -193,10 +221,12 @@ export class InDBStore {
 		this._queue.push(deferer)
 		return deferer
 	}
+
 	objectStore(writable = false) {
 		const name = this.name
 		return this.transaction(writable).then(tx => tx.objectStore(name))
 	}
+
 	cursor(options) {
 		const { index, range, direction, onTouch, onDone, onError, writable = false } = options
 		return this.objectStore(writable).then((objectStore) => {
@@ -216,6 +246,7 @@ export class InDBStore {
 			}
 		})
 	}
+
 	request(fn, options = {}) {
 		const { writable = false } = options
 		return new Promise((resolve, reject) => {
@@ -231,6 +262,7 @@ export class InDBStore {
 			})
 		})
 	}
+
 	iterate(fn, options = {}) {
 		const { index, range, writable = false, direction = 'next' } = options
 		return new Promise((resolve, reject) => {
@@ -257,6 +289,7 @@ export class InDBStore {
 			})
 		})
 	}
+
 	batch(fns, options = {}) {
 		const { writable = true } = options
 		return this.transaction(writable).then((tx) => {
@@ -282,6 +315,11 @@ export class InDBStore {
 
 	// ==========================================
 
+	/**
+	 *
+	 * @param {string} key
+	 * @returns
+	 */
 	get(key) {
 		// single key
 		if (!Array.isArray(key)) {
@@ -293,16 +331,18 @@ export class InDBStore {
 		const fns = keys.map(key => objectStore => objectStore.get(key))
 		return this.batch(fns, { writable: false })
 	}
+
 	keys() {
-		const keyPah = this.keyPath
+		const keyPath = this.primaryKeyPath
 		const results = []
 		return this.each((obj) => {
-			const key = parse(obj, keyPah)
+			const key = parse(obj, keyPath)
 			results.push(key)
 		}).then(() => {
 			return results
 		})
 	}
+
 	all() {
 		const results = []
 		return this.each((obj) => {
@@ -311,10 +351,13 @@ export class InDBStore {
 			return results
 		})
 	}
+
 	count() {
 		return this.request(objectStore => objectStore.count())
 	}
+
 	// ==========================================
+
 	each(fn) {
 		return this.iterate((cursor, next) => {
 			const obj = cursor.value
@@ -322,6 +365,7 @@ export class InDBStore {
 			next()
 		})
 	}
+
 	reverse(fn) {
 		return this.iterate((cursor, next) => {
 			const obj = cursor.value
@@ -329,6 +373,7 @@ export class InDBStore {
 			next()
 		}, { direction: 'prev' })
 	}
+
 	some(count = 10, offset = 0) {
 		return new Promise((resolve, reject) => {
 			const results = []
@@ -367,16 +412,33 @@ export class InDBStore {
 			}).catch(reject)
 		})
 	}
+
 	first() {
 		return this.some(1).then(items => items[0])
 	}
+
 	last() {
 		return this.some(1, -1).then(items => items[0])
 	}
+
 	// =========================
+
+	/**
+	 * find a record with given index
+	 * @param {string} key index name
+	 * @param {*} value
+	 * @returns
+	 */
 	find(key, value) {
 		return this.request(objectStore => objectStore.index(key).get(value))
 	}
+	/**
+	 * query several records with given index and compare condition
+	 * @param {string} key index name
+	 * @param {*} value
+	 * @param {string} [compare]
+	 * @returns
+	 */
 	query(key, value, compare) {
 		const range = (function() {
 			switch (compare) {
@@ -437,6 +499,17 @@ export class InDBStore {
 			})
 		})
 	}
+
+	/**
+	 * query several records with conditions,
+	 * notice that, it works with iterator not with index.
+	 * @param {...object[]} rules
+	 * @param {string} rules[][].key index name or any keyPath.
+	 * @param {*} rules[][].value
+	 * @param {string=} rules[][].compare
+	 * @param {boolean=} rules[][].optional whether this condition is optional
+	 * @returns
+	 */
 	select(...rules) {
 		const currentStore = this.store
 		const indexes = currentStore.indexes || []
@@ -538,6 +611,12 @@ export class InDBStore {
 
 	// =====================================
 
+	/**
+	 * add a record into store
+	 * @param {*} obj
+	 * @param {string} [key]
+	 * @returns
+	 */
 	add(obj, key) {
 		if (Array.isArray(obj)) {
 			const objs = obj
@@ -555,6 +634,13 @@ export class InDBStore {
 
 		return this.request(objectStore => objectStore.add(obj, key), { writable: true })
 	}
+
+	/**
+	 *
+	 * @param {*} obj
+	 * @param {string} key
+	 * @returns
+	 */
 	put(obj, key) {
 		if (Array.isArray(obj)) {
 			const objs = obj
@@ -572,6 +658,7 @@ export class InDBStore {
 
 		return this.request(objectStore => objectStore.put(obj, key), { writable: true })
 	}
+
 	delete(key) {
 		if (Array.isArray(key)) {
 			const keys = key
@@ -589,8 +676,9 @@ export class InDBStore {
 
 		return this.request(objectStore => objectStore.delete(key), { writable: true })
 	}
+
 	remove(obj) {
-		const keyPah = this.keyPath
+		const keyPath = this.primaryKeyPath
 
 		if (Array.isArray(obj)) {
 			const objs = obj
@@ -599,7 +687,7 @@ export class InDBStore {
 			}
 
 			const fns = objs.map(obj => {
-				const key = parse(obj, keyPah)
+				const key = parse(obj, keyPath)
 				return objectStore => objectStore.delete(key)
 			})
 			return this.batch(fns)
@@ -609,14 +697,58 @@ export class InDBStore {
 			return Promise.resolve()
 		}
 
-		const key = parse(obj, keyPah)
+		const key = parse(obj, keyPath)
 		if (!key) {
 			return Promise.resolve()
 		}
 
 		return this.delete(key)
 	}
+
 	clear() {
 		return this.request(objectStore => objectStore.clear(), { writable: true })
 	}
+}
+
+function makeKeyChain(path) {
+	let chain = path.toString().split(/\.|\[|\]/).filter(item => !!item)
+	return chain
+}
+function parse(obj, path) {
+	if (typeof path === 'undefined' || path === null) {
+	  return;
+	}
+
+	if (Array.isArray(path)) {
+	  for (let i = 0, len = path.length; i < len; i ++) {
+		const item = path[i]
+		const res = parse(obj, item)
+		if (res !== undefined) {
+		  return res
+		}
+	  }
+	  return
+	}
+
+	let chain = makeKeyChain(path)
+
+	if (!chain.length) {
+	  return obj
+	}
+
+	let target = obj
+	for (let i = 0, len = chain.length; i < len; i ++) {
+	  let key = chain[i]
+	  if (target[key] === undefined) {
+		return
+	  }
+	  target = target[key]
+	}
+	return target
+}
+
+function modifyError(e) {
+	const { message } = e
+	e.message = message.indexOf('[IndexedDB]') === -1 ? '[IndexedDB]: ' + message : message
+	return e
 }

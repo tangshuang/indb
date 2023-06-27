@@ -2,10 +2,11 @@
   "name": "indb",
   "version": "3.2.2",
   "description": "A library to operate IndexedDB easily.",
-  "main": "dist/indb.js",
+  "main": "dist/index.js",
+  "module": "es/index.js",
   "scripts": {
     "prepublishOnly": "npm run build",
-    "build": "rm -rf dist && mkdir dist && webpack",
+    "build": "rm -rf dist && mkdir dist && NODE_OPTIONS=--openssl-legacy-provider webpack",
     "test": "npm run build && node test.js",
     "watch": "npm run build -- --watch",
     "sync": "npm run build && cp -f dist/* ../@tencent/shadow-log/node_modules/indb/dist/"
