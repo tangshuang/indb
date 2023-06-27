@@ -3,15 +3,16 @@ export class InDB {
 	 * InDB
 	 * @param {object} [options]
 	 * @param {string} [options.name] database name
-	 * @param {number} [version] database version
-	 * @param {object[]} [stores]
-	 * @param {string} [stores[].primaryKeyPath] store primary keyPath
-	 * @param {boolean} [stores[].autoIncrement] is store primary keyPath autoIncrement, if true, primary key will be number
-	 * @param {boolean} [stores[].isKv] is store set to be Key-Value mode, if true, the store will have Storage methods, and `primaryKeyPath` `autoIncrement` not working
-	 * @param {object[]} [stores[].indexes]
-	 * @param {string} [stores[].indexes[].name] index name
-	 * @param {string} [stores[].indexes[].keyPath] index keyPath
-	 * @param {boolean} [stores[].indexes[].unique] should index value be unique
+	 * @param {number} [options.version] database version
+	 * @param {object[]} [options.stores]
+	 * @param {string} [options.stores[].name] store name
+	 * @param {string} [options.stores[].primaryKeyPath] store primary keyPath
+	 * @param {boolean} [options.stores[].autoIncrement] is store primary keyPath autoIncrement, if true, primary key will be number
+	 * @param {boolean} [options.stores[].isKv] is store set to be Key-Value mode, if true, the store will have Storage methods, and `primaryKeyPath` `autoIncrement` not working
+	 * @param {object[]} [options.stores[].indexes]
+	 * @param {string} [options.stores[].indexes[].name] index name
+	 * @param {string} [options.stores[].indexes[].keyPath] index keyPath
+	 * @param {boolean} [options.stores[].indexes[].unique] should index value be unique
 	 * @returns
 	 */
 	constructor(options = {}) {
@@ -31,6 +32,9 @@ export class InDB {
 			]
 		}
 
+		this.cache = {}
+		this.connection = null
+
 		this.name = name
 		this.version = version
 		this.stores = stores
@@ -38,6 +42,7 @@ export class InDB {
 		// update database structure
 		const request = indexedDB.open(name, version)
 		request.onupgradeneeded = (e) => {
+			// @ts-ignore
 			const db = e.target.result
 			const existStoreNames = Array.from(db.objectStoreNames)
 			const passStoreNames = []
@@ -45,6 +50,7 @@ export class InDB {
 			stores.forEach((item) => {
 				let objectStore = null
 				if (existStoreNames.indexOf(item.name) > -1) {
+					// @ts-ignore
 					objectStore = e.target.transaction.objectStore(item.name)
 				}
 				else {
@@ -83,12 +89,11 @@ export class InDB {
 			console.error(modifyError(new Error('indexedDB ' + name + ' is blocked')))
 		}
 
-		this.cache = {}
-
 		// use as a storage like:
 		// const store = new InDB()
 		// store.setItem('key', 'value')
 		if (asStorage) {
+			// @ts-ignore
 			return this.use(name)
 		}
 	}
@@ -100,11 +105,17 @@ export class InDB {
 				reject(modifyError(e))
 			}
 			request.onsuccess = (e) => {
+				// @ts-ignore
 				resolve(e.target.result)
 			}
 		})
 	}
 
+	/**
+	 *
+	 * @param {string} name
+	 * @returns {InDBStore}
+	 */
 	use(name) {
 		const currentStore = this.stores.find(item => item.name === name)
 
@@ -638,7 +649,7 @@ class InDBStore {
 	/**
 	 *
 	 * @param {*} obj
-	 * @param {string} key
+	 * @param {string} [key] if not pass, primaryKey will read from obj
 	 * @returns
 	 */
 	put(obj, key) {
@@ -714,6 +725,7 @@ function makeKeyChain(path) {
 	let chain = path.toString().split(/\.|\[|\]/).filter(item => !!item)
 	return chain
 }
+
 function parse(obj, path) {
 	if (typeof path === 'undefined' || path === null) {
 	  return;
